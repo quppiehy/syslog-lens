@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Register — Syslog Lens</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/auth.css">
+</head>
+<body>
+<div class="brand"><svg width="24" height="24" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M17 17l6 6"/><path d="M7 11h8" stroke="#f97316"/></svg><div>Syslog Lens<small></small></div></div>
+
+<main class="card">
+  <h1>Create an account</h1>
+  <p class="sub">Register with your name and employee number.</p>
+
+  <form id="registerForm" novalidate>
+    <div class="field">
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" autocomplete="name" required>
+    </div>
+    <div class="field">
+      <label for="employeeNumber">Employee number</label>
+      <input id="employeeNumber" name="employeeNumber" type="text" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" required>
+    </div>
+    <div class="field">
+      <label for="confirmPassword">Confirm password</label>
+      <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" required>
+    </div>
+
+    <p id="error" class="msg error" role="alert" aria-live="assertive"></p>
+
+    <div class="actions">
+      <button type="submit" class="btn go" id="submitBtn">Register</button>
+    </div>
+  </form>
+
+  <p class="altlink">Already have an account? <a href="/login">Sign in</a></p>
+</main>
+
+<script src="/auth.js"></script>
+<script>
+(function () {
+  var MIN_PASSWORD_LENGTH = 8;
+  var form = document.getElementById('registerForm');
+  var errorEl = document.getElementById('error');
+  var submitBtn = document.getElementById('submitBtn');
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    setMessage(errorEl, '', null);
+
+    var name = document.getElementById('name').value;
+    var employeeNumber = document.getElementById('employeeNumber').value;
+    var password = document.getElementById('password').value;
+    var confirmPassword = document.getElementById('confirmPassword').value;
+
+    if (!name.trim() || !employeeNumber.trim() || !password || !confirmPassword) {
+      setMessage(errorEl, 'All fields are required.', 'error');
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setMessage(errorEl, 'Password must be at least ' + MIN_PASSWORD_LENGTH + ' characters.', 'error');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setMessage(errorEl, 'Passwords do not match.', 'error');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    try {
+      var result = await postJson('/api/auth/register', { name: name, employeeNumber: employeeNumber, password: password });
+      if (result.ok) {
+        window.location.href = '/login?registered=1';
+        return;
+      }
+      var message = (result.data && result.data.error) || 'Registration failed. Try again.';
+      setMessage(errorEl, message, 'error');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+})();
+</script>
+</body></html>

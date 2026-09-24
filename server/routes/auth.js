@@ -3,8 +3,18 @@ const jwt = require('jsonwebtoken');
 const { UniqueConstraintError } = require('sequelize');
 const User = require('../models/user');
 const { hashPassword, verifyPasswordAsync } = require('../lib/password');
-const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config');
+const { JWT_SECRET, JWT_EXPIRES_IN, COOKIE_NAME, COOKIE_SECURE, COOKIE_MAX_AGE_MS } = require('../config');
 const requireAuth = require('../middleware/auth');
+
+function setAuthCookie(res, token) {
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: 'strict',
+    path: '/',
+    maxAge: COOKIE_MAX_AGE_MS,
+    secure: COOKIE_SECURE,
+  });
+}
 
 const router = express.Router();
 
@@ -124,6 +134,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = signToken(user);
+    setAuthCookie(res, token);
 
     return res.status(200).json({
       token,
@@ -142,6 +153,13 @@ router.post('/login', async (req, res) => {
 router.get('/me', requireAuth, (req, res) => {
   const { id, name, employeeNumber } = req.user;
   return res.status(200).json({ id, name, employeeNumber });
+});
+
+// Idempotent: clearing an already-absent cookie is a no-op, so calling this
+// with no session (or calling it twice) still returns 204.
+router.post('/logout', (req, res) => {
+  res.clearCookie(COOKIE_NAME, { path: '/' });
+  return res.status(204).end();
 });
 
 module.exports = router;

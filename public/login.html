@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in — Syslog Lens</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/auth.css">
+</head>
+<body>
+<div class="brand"><svg width="24" height="24" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M17 17l6 6"/><path d="M7 11h8" stroke="#f97316"/></svg><div>Syslog Lens<small></small></div></div>
+
+<main class="card">
+  <h1>Sign in</h1>
+  <p class="sub">Enter your employee number and password.</p>
+
+  <p id="notice" class="msg success" role="status"></p>
+
+  <form id="loginForm" novalidate>
+    <div class="field">
+      <label for="employeeNumber">Employee number</label>
+      <input id="employeeNumber" name="employeeNumber" type="text" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+
+    <p id="error" class="msg error" role="alert" aria-live="assertive"></p>
+
+    <div class="actions">
+      <button type="submit" class="btn go" id="submitBtn">Sign in</button>
+    </div>
+  </form>
+
+  <p class="altlink">No account? <a href="/register">Register</a></p>
+</main>
+
+<script src="/auth.js"></script>
+<script>
+(function () {
+  var form = document.getElementById('loginForm');
+  var errorEl = document.getElementById('error');
+  var noticeEl = document.getElementById('notice');
+  var submitBtn = document.getElementById('submitBtn');
+
+  if (qs('registered') === '1') {
+    setMessage(noticeEl, 'Registration complete. Sign in with your new account.', 'success');
+  }
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    setMessage(errorEl, '', null);
+
+    var employeeNumber = document.getElementById('employeeNumber').value;
+    var password = document.getElementById('password').value;
+
+    if (!employeeNumber.trim() || !password) {
+      setMessage(errorEl, 'Enter your employee number and password.', 'error');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    try {
+      var result = await postJson('/api/auth/login', { employeeNumber: employeeNumber, password: password });
+      if (result.ok) {
+        window.location.href = '/';
+        return;
+      }
+      var message = (result.data && result.data.error) || 'Sign in failed. Try again.';
+      setMessage(errorEl, message, 'error');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+})();
+</script>
+</body></html>

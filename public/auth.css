@@ -1,0 +1,54 @@
+/* Shared styling for the login/register pages. Visual language matches
+   syslog-lens.html: same CSS variables, same IBM Plex fonts, same
+   light/dark handling (prefers-color-scheme, overridable via
+   :root[data-theme]). */
+:root{
+  --bg:#e9edf1;--panel:#f7f9fb;--ink:#141a22;--mute:#5d6877;--line:#d5dbe3;--hi:#ffffff;
+  --s2:#f0463a;--s6:#4c8dff;
+  --sans:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#0e131a;--panel:#151c26;--ink:#e4e9f0;--mute:#8a95a6;--line:#242d3a;--hi:#1b2431}
+}
+:root[data-theme="dark"]{--bg:#0e131a;--panel:#151c26;--ink:#e4e9f0;--mute:#8a95a6;--line:#242d3a;--hi:#1b2431}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100%;padding:24px
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--s6);outline-offset:2px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:18px;letter-spacing:-.01em;margin-bottom:22px}
+.brand small{display:block;height:3px;margin-top:2px;background:linear-gradient(90deg,#d1006f,#e0245e,#f0463a,#f97316,#e5a800,#12a6bd,#4c8dff,#8a93a3)}
+.card{
+  width:min(380px,100%);background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:28px 26px
+}
+.card h1{font-size:19px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+.card p.sub{margin:0 0 20px;color:var(--mute);font-size:13px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12.5px;color:var(--mute);margin-bottom:5px}
+.field input{
+  width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;
+  background:var(--hi);color:var(--ink);font:14px/1.4 var(--sans)
+}
+.actions{margin-top:20px;display:flex;flex-direction:column;gap:10px}
+.btn{
+  padding:9px 14px;border:1px solid var(--line);border-radius:7px;background:var(--hi);
+  font-weight:500;text-align:center;width:100%
+}
+.btn:hover{border-color:var(--mute)}
+.btn.go{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.go:hover{opacity:.92}
+.btn:disabled{opacity:.55;cursor:default}
+.altlink{margin-top:16px;text-align:center;font-size:13px;color:var(--mute)}
+.altlink a{color:var(--s6);text-decoration:none}
+.altlink a:hover{text-decoration:underline}
+.msg{min-height:18px;font-size:13px;margin-top:2px}
+.msg.error{color:var(--s2)}
+.msg.success{color:#1a8a4a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .msg.success{color:#4bd08a}}
+:root[data-theme="dark"] .msg.success{color:#4bd08a}
