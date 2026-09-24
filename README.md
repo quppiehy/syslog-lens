@@ -4,7 +4,17 @@ A browser-based tool for troubleshooting network syslogs. Upload or paste a log 
 
 ## Using the app
 
-No installation needed. Open `syslog-lens.html` in any modern browser. To try it without your own log, click **Try a sample log**.
+The app is served by the included backend and requires signing in.
+
+```bash
+npm install
+cp .env.example .env
+npm start
+```
+
+Then open <http://localhost:3000>. You'll be redirected to `/login`; register an account first if you don't have one. Once signed in, click **Try a sample log** to try it without your own log.
+
+(`syslog-lens.html` can still be opened directly as a plain file for local development/testing — see `test/ui-smoke.test.js` — but that bypasses the login and is not how the app is meant to be used.)
 
 ## Running the tests (developers only)
 
@@ -28,9 +38,27 @@ npx playwright install chromium
 npm test
 ```
 
-## Backend (in progress)
+## Backend
 
-A small Express + SQLite backend is being added under `server/` to support future authentication. Stage 1 added the foundation: a database connection, a `User` model, and a health-check endpoint. Stage 2 adds user registration. Stage 3 adds login (credential check only). Stage 4 adds JWT-based authentication: login now issues a token, and a protected `/api/auth/me` endpoint returns the current user. There is no frontend integration yet.
+A small Express + SQLite backend under `server/` provides authentication and now serves the app itself. Stage 1 added the foundation: a database connection, a `User` model, and a health-check endpoint. Stage 2 added user registration. Stage 3 added login (credential check only). Stage 4 added JWT-based authentication: login issues a token, and a protected `/api/auth/me` endpoint returns the current user. Stage 5 wires it all together: Express now serves `syslog-lens.html` itself, and it is never sent to an unauthenticated visitor — this is enforced server-side, not by hiding things in JS.
+
+### Routes
+
+| Route | Access | Notes |
+|---|---|---|
+| `GET /login` | Public | Login page (`public/login.html`). Redirects to `/` if already signed in. |
+| `GET /register` | Public | Registration page (`public/register.html`). Redirects to `/` if already signed in. |
+| `GET /auth.css`, `/auth.js` | Public | Shared static assets for the login/register pages (served from `public/`). |
+| `POST /api/auth/register` | Public | Create an account. |
+| `POST /api/auth/login` | Public | Sign in; sets the auth cookie and returns `{token,user}`. |
+| `POST /api/auth/logout` | Public (idempotent) | Clears the auth cookie. |
+| `GET /api/auth/me` | Protected | Current user; accepts the cookie or a Bearer token. |
+| `GET /` and `GET /syslog-lens.html` | Protected | The app itself. Unauthenticated requests get a `302` to `/login`; responses carry `Cache-Control: no-store`. |
+| Everything else | — | `404`, with nothing leaked from `server/`, `.env`, the SQLite DB, etc. — only `public/` is ever statically served. |
+
+### Cookie model
+
+Login sets an httpOnly `sl_token` cookie (`HttpOnly`, `SameSite=Strict`, `Path=/`, `Max-Age` matching the JWT's expiry, and `Secure` when `COOKIE_SECURE=true`). The frontend never reads or stores the token itself (no `localStorage`/`sessionStorage`) — `syslog-lens.html` only calls `GET /api/auth/me` (to show "Signed in as …") and `POST /api/auth/logout`, both `credentials: 'same-origin'`, relying on the browser to send the cookie. `requireAuth` (API routes) and `requirePage` (HTML routes) both accept either the cookie or an `Authorization: Bearer <token>` header, so existing API clients/tests using Bearer tokens keep working unchanged; `requirePage` additionally redirects to `/login` (instead of a 401 JSON body) and clears an invalid/expired cookie.
 
 **Setup:**
 
@@ -39,7 +67,7 @@ npm install
 cp .env.example .env
 ```
 
-`.env` controls `PORT` (default `3000`), `DB_STORAGE` (default `server/data/syslog-lens.sqlite`, created automatically if missing), `JWT_SECRET`, and `JWT_EXPIRES_IN` (default `8h`).
+`.env` controls `PORT` (default `3000`), `DB_STORAGE` (default `server/data/syslog-lens.sqlite`, created automatically if missing), `JWT_SECRET`, `JWT_EXPIRES_IN` (default `8h`), and `COOKIE_SECURE` (default `false`; set `true` when serving over HTTPS so the auth cookie is marked `Secure`).
 
 `JWT_SECRET` is **required** — the server refuses to start if it's missing or shorter than 32 characters. Generate a strong one with:
 
@@ -138,8 +166,9 @@ curl.exe http://localhost:3000/api/auth/me -H "Authorization: Bearer $($login.to
 
 | Path | Purpose |
 |---|---|
-| `syslog-lens.html` | The whole app: HTML, CSS and JS in one file |
+| `syslog-lens.html` | The whole app: HTML, CSS and JS in one file. Served by the backend at `/` and `/syslog-lens.html`, protected by login. |
+| `public/` | Public login/register pages and their shared assets (`login.html`, `register.html`, `auth.css`, `auth.js`) |
 | `test/` | Automated tests |
 | `test-data/` | Synthetic sample log and the incident groupings it should produce |
-| `server/` | Backend (Express + Sequelize/SQLite), currently just the Stage 1 foundation |
+| `server/` | Backend (Express + Sequelize/SQLite): auth, page guards, and static serving |
 | `HANDOFF.md` | Design decisions, known limitations and next steps |

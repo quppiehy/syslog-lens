@@ -101,3 +101,12 @@ Latest run: 36/36 tests passing (6 parser, 5 integration, 1 UI smoke, 2 sample-l
 2. Test with real logs and large files, and check the dark theme, mobile and screen readers.
 3. Optional: add a copy or export of an incident summary.
 4. Optional: recognise more log formats (JSON logs, IPv4-in-IPv6, IPv6 zone IDs) and more Cisco timezone abbreviations beyond UTC/GMT.
+
+## Stage 5: auth-gated serving
+
+`syslog-lens.html` is now served by Express (`GET /` and `GET /syslog-lens.html`, both behind `requirePage`) instead of being opened as a bare file — see README.md's "Routes" and "Cookie model" sections for the full route table and how the httpOnly `sl_token` cookie works. Key points for future work:
+
+- `server/app.js` only statically serves `public/` (login/register assets); everything else outside `/api/*` and the two explicit page routes is a plain 404, so `server/`, `.env` and the SQLite DB are never reachable over HTTP.
+- `server/middleware/auth.js` now exports `requireAuth` (API, 401 JSON), `requirePage` (HTML, 302 to `/login` + clears a bad cookie), and the shared `resolveUser` helper both build on. Both accept either the `sl_token` cookie or a Bearer header.
+- `syslog-lens.html` itself only gained a small self-contained IIFE at the end of its `<script>` (signed-in-as + logout, `pageshow`/bfcache re-check) — parsing, grouping, timeline and styling are untouched. That block is a deliberate no-op when `fetch` doesn't exist (the jsdom test loader) or fails for non-HTTP reasons (`file://`), so `syslog-lens.html` still works standalone for local dev/testing.
+- New tests: `test/auth-boundary.test.js` (server-side route/cookie boundary checks) and `test/auth-e2e.test.js` (Playwright: register → login → use the app → logout → back-button/direct-URL checks). `npm test` is 104/104 as of this stage (the 36/36 count above predates Stages 2-5).
