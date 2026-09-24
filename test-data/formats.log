@@ -1,0 +1,13 @@
+000123: *Mar  1 00:00:01.123: %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down
+.Mar  1 00:00:05.500: %SYS-5-CONFIG_I: Configured from console by vty0
+<189>45: core-rtr1: Sep 24 03:14:02.114 UTC: %OSPF-5-ADJCHG: Process 1, Nbr 10.255.0.1 on GigabitEthernet0/0/1 from FULL to DOWN, Neighbor Down: Interface down or detached
+<134>1 2026-09-24T05:00:00.000Z v6-rtr1 ndp 100 NBR - Neighbor 2001:db8::1 reachability confirmed
+<133>1 2026-09-24T05:00:30.000Z v6-rtr1 ndp 100 NBR - Neighbor 2001:db8::1 became unreachable
+<190>1 2026-09-24T05:00:45.000Z v6-rtr2 ndp 100 NBR - Neighbor fe80::a1b2:3c4d reachability confirmed
+<30>1 2026-09-24T05:01:00.000Z dhcp02 dhcpd 640 DHCPACK - DHCPACK on 10.40.1.10 to aa:bb:cc:dd:ee:ff via bond0
+<187>1 2026-09-24T05:05:00.000Z srv1 kernel 1 IFDOWN - Interface eth0, link is not ready
+<190>1 2026-09-24T05:05:20.000Z srv1 kernel 1 IFUP - Interface eth0, link is ready
+<187>1 2026-09-24T05:10:00.000Z mx1 chassisd 200 LINK - interface ge-0/0/0 changed state to down
+<190>1 2026-09-24T05:10:15.000Z mx1 chassisd 200 LINK - interface ge-0/0/0 changed state to up
+<187>1 2026-09-24T05:15:00.000Z sw1 ifmgr 300 LINK - port gi0/1 changed state to down
+<190>1 2026-09-24T05:15:10.000Z sw1 ifmgr 300 LINK - port gi0/1 changed state to up

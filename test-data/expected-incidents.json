@@ -1,0 +1,466 @@
+{
+  "_meta": {
+    "synthetic_test_data": true,
+    "internal_use_only": "Development and testing only. Do not display to end users or ship in the production UI.",
+    "disclaimer": "All devices, addresses and events are fictional. This is not real production data.",
+    "log_file": "network-incidents.log",
+    "format": "RFC 5424 with structured data [synth@32473 eid=... synthetic=\"true\"]. eid is a test-only event identifier; the parser must not use it for grouping.",
+    "total_events": 84,
+    "expected_unparsed_lines": 0,
+    "grouping_rule": "An incident groups events on ONE device (hostname) about the same subject (interface/neighbour, source IP, or BGP peer) where consecutive events are at most 300 seconds apart. Events within an incident may span several severity levels; severity views list the incident under each level it contains."
+  },
+  "expected_incident_count": 8,
+  "expected_incident_count_by_pattern": {
+    "auth_failures": 3,
+    "bgp_disruption": 2,
+    "ospf_flap": 3
+  },
+  "incidents": [
+    {
+      "id": "INC-OSPF-01",
+      "title": "OSPF adjacency and interface flap (core-rtr1 side)",
+      "pattern": "ospf_flap",
+      "device": "core-rtr1",
+      "window": {
+        "start": "2026-09-24T03:14:02.114Z",
+        "end": "2026-09-24T03:16:48.733Z"
+      },
+      "largest_internal_gap_seconds": 38.6,
+      "expected_event_count": 12,
+      "severity_levels": [
+        3,
+        4,
+        5,
+        6
+      ],
+      "events_by_severity": {
+        "3": [
+          "E012",
+          "E024"
+        ],
+        "4": [
+          "E034"
+        ],
+        "5": [
+          "E014",
+          "E017",
+          "E020",
+          "E026",
+          "E028",
+          "E031",
+          "E036"
+        ],
+        "6": [
+          "E021",
+          "E032"
+        ]
+      },
+      "event_ids": [
+        "E012",
+        "E014",
+        "E017",
+        "E020",
+        "E021",
+        "E024",
+        "E026",
+        "E028",
+        "E031",
+        "E032",
+        "E034",
+        "E036"
+      ],
+      "distinctive_fragments": [
+        "GigabitEthernet0/0/1 changed state to down",
+        "Nbr 10.255.0.2",
+        "from FULL to DOWN",
+        "Dead timer expired",
+        "SPF calculation completed"
+      ],
+      "notes": "Three flap cycles: two link-down cycles, then a dead-timer expiry. Sev 3 link down, sev 4 dead timer, sev 5 adjacency changes, sev 6 SPF runs."
+    },
+    {
+      "id": "INC-OSPF-02",
+      "title": "OSPF adjacency and interface flap (core-rtr2 side)",
+      "pattern": "ospf_flap",
+      "device": "core-rtr2",
+      "window": {
+        "start": "2026-09-24T03:14:02.125Z",
+        "end": "2026-09-24T03:16:48.720Z"
+      },
+      "largest_internal_gap_seconds": 38.6,
+      "expected_event_count": 10,
+      "severity_levels": [
+        3,
+        4,
+        5
+      ],
+      "events_by_severity": {
+        "3": [
+          "E013",
+          "E023"
+        ],
+        "4": [
+          "E033"
+        ],
+        "5": [
+          "E015",
+          "E016",
+          "E019",
+          "E025",
+          "E027",
+          "E030",
+          "E035"
+        ]
+      },
+      "event_ids": [
+        "E013",
+        "E015",
+        "E016",
+        "E019",
+        "E023",
+        "E025",
+        "E027",
+        "E030",
+        "E033",
+        "E035"
+      ],
+      "distinctive_fragments": [
+        "GigabitEthernet0/0/1 changed state to down",
+        "Nbr 10.255.0.1",
+        "from FULL to DOWN",
+        "Dead timer expired"
+      ],
+      "notes": "Mirror of the same flap seen from the other end. Must stay separate from INC-OSPF-01 because the device differs."
+    },
+    {
+      "id": "INC-OSPF-03",
+      "title": "OSPF neighbour drop on dist-sw1 (Vlan10)",
+      "pattern": "ospf_flap",
+      "device": "dist-sw1",
+      "window": {
+        "start": "2026-09-24T03:14:31.220Z",
+        "end": "2026-09-24T03:14:59.870Z"
+      },
+      "largest_internal_gap_seconds": 28.6,
+      "expected_event_count": 2,
+      "severity_levels": [
+        4,
+        5
+      ],
+      "events_by_severity": {
+        "4": [
+          "E018"
+        ],
+        "5": [
+          "E022"
+        ]
+      },
+      "event_ids": [
+        "E018",
+        "E022"
+      ],
+      "distinctive_fragments": [
+        "on Vlan10",
+        "Dead timer expired",
+        "LOADING to FULL"
+      ],
+      "notes": "Same message shape and overlapping time as INC-OSPF-01/02 but a different device and interface."
+    },
+    {
+      "id": "INC-AUTH-01",
+      "title": "SSH brute force on bastion01 (first wave)",
+      "pattern": "auth_failures",
+      "device": "bastion01",
+      "window": {
+        "start": "2026-09-24T03:20:11.402Z",
+        "end": "2026-09-24T03:22:41.006Z"
+      },
+      "largest_internal_gap_seconds": 32.3,
+      "expected_event_count": 13,
+      "severity_levels": [
+        3,
+        4,
+        5,
+        6
+      ],
+      "events_by_severity": {
+        "3": [
+          "E053"
+        ],
+        "4": [
+          "E039",
+          "E040",
+          "E042",
+          "E044",
+          "E045",
+          "E046",
+          "E050",
+          "E051"
+        ],
+        "5": [
+          "E041",
+          "E047",
+          "E055"
+        ],
+        "6": [
+          "E054"
+        ]
+      },
+      "event_ids": [
+        "E039",
+        "E040",
+        "E041",
+        "E042",
+        "E044",
+        "E045",
+        "E046",
+        "E047",
+        "E050",
+        "E051",
+        "E053",
+        "E054",
+        "E055"
+      ],
+      "distinctive_fragments": [
+        "Failed password for root from 203.0.113.45",
+        "Failed password for invalid user admin",
+        "pam_unix(sshd:auth)",
+        "maximum authentication attempts exceeded",
+        "[sshd] Ban 203.0.113.45"
+      ],
+      "notes": "Sev 4 failed passwords (repeated), sev 5 PAM failures and ban, sev 3 max-tries error, sev 6 connection closed."
+    },
+    {
+      "id": "INC-AUTH-02",
+      "title": "SSH failures on bastion02 (same source, other device)",
+      "pattern": "auth_failures",
+      "device": "bastion02",
+      "window": {
+        "start": "2026-09-24T03:20:30.118Z",
+        "end": "2026-09-24T03:21:47.512Z"
+      },
+      "largest_internal_gap_seconds": 42.6,
+      "expected_event_count": 3,
+      "severity_levels": [
+        4
+      ],
+      "events_by_severity": {
+        "4": [
+          "E043",
+          "E049",
+          "E052"
+        ]
+      },
+      "event_ids": [
+        "E043",
+        "E049",
+        "E052"
+      ],
+      "distinctive_fragments": [
+        "Failed password for root from 203.0.113.45"
+      ],
+      "notes": "Identical message text and source IP as INC-AUTH-01 in the same minutes, but a different device."
+    },
+    {
+      "id": "INC-AUTH-03",
+      "title": "SSH failures on bastion01 (second wave, 42 min later)",
+      "pattern": "auth_failures",
+      "device": "bastion01",
+      "window": {
+        "start": "2026-09-24T04:05:19.220Z",
+        "end": "2026-09-24T04:05:24.881Z"
+      },
+      "largest_internal_gap_seconds": 5.7,
+      "expected_event_count": 2,
+      "severity_levels": [
+        4
+      ],
+      "events_by_severity": {
+        "4": [
+          "E082",
+          "E083"
+        ]
+      },
+      "event_ids": [
+        "E082",
+        "E083"
+      ],
+      "distinctive_fragments": [
+        "Failed password for root from 203.0.113.45 port 5201"
+      ],
+      "notes": "Same device, same source IP and message pattern as INC-AUTH-01 but starts about 42 minutes after its last event, beyond the 300 s window."
+    },
+    {
+      "id": "INC-BGP-01",
+      "title": "BGP neighbour disruption on edge-rtr1 (peer 198.51.100.2, AS 64510)",
+      "pattern": "bgp_disruption",
+      "device": "edge-rtr1",
+      "window": {
+        "start": "2026-09-24T03:27:33.410Z",
+        "end": "2026-09-24T03:31:18.402Z"
+      },
+      "largest_internal_gap_seconds": 44.8,
+      "expected_event_count": 13,
+      "severity_levels": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "events_by_severity": {
+        "2": [
+          "E063"
+        ],
+        "3": [
+          "E061"
+        ],
+        "4": [
+          "E059",
+          "E060",
+          "E066",
+          "E067",
+          "E070"
+        ],
+        "5": [
+          "E062",
+          "E071",
+          "E073",
+          "E074",
+          "E076"
+        ],
+        "6": [
+          "E072"
+        ]
+      },
+      "event_ids": [
+        "E059",
+        "E060",
+        "E061",
+        "E062",
+        "E063",
+        "E066",
+        "E067",
+        "E070",
+        "E071",
+        "E072",
+        "E073",
+        "E074",
+        "E076"
+      ],
+      "distinctive_fragments": [
+        "keepalive delayed",
+        "hold time expired",
+        "neighbor 198.51.100.2 Down",
+        "Default route 0.0.0.0/0 withdrawn",
+        "Connection attempt to neighbor 198.51.100.2 failed",
+        "neighbor 198.51.100.2 Up"
+      ],
+      "notes": "Keepalive delay (sev 4), hold-timer notification (sev 3), session down (sev 5), default route loss (sev 2), retry failures (sev 4), recovery, then a brief second flap."
+    },
+    {
+      "id": "INC-BGP-02",
+      "title": "BGP neighbour disruption on edge-rtr2 (peer 198.51.100.6, AS 64511)",
+      "pattern": "bgp_disruption",
+      "device": "edge-rtr2",
+      "window": {
+        "start": "2026-09-24T03:28:41.300Z",
+        "end": "2026-09-24T03:29:44.100Z"
+      },
+      "largest_internal_gap_seconds": 62.8,
+      "expected_event_count": 3,
+      "severity_levels": [
+        3,
+        5
+      ],
+      "events_by_severity": {
+        "3": [
+          "E064"
+        ],
+        "5": [
+          "E065",
+          "E069"
+        ]
+      },
+      "event_ids": [
+        "E064",
+        "E065",
+        "E069"
+      ],
+      "distinctive_fragments": [
+        "neighbor 198.51.100.6",
+        "hold time expired"
+      ],
+      "notes": "Similar BGP hold-timer failure at the same time as INC-BGP-01 but a different device and peer."
+    }
+  ],
+  "must_not_merge": [
+    {
+      "a": "INC-AUTH-01",
+      "b": "INC-AUTH-03",
+      "reason": "Same device, source IP and message pattern, but the gap is over 300 s (about 42 minutes)."
+    },
+    {
+      "a": "INC-AUTH-01",
+      "b": "INC-AUTH-02",
+      "reason": "Same source IP and messages at the same time, but different device (bastion01 vs bastion02)."
+    },
+    {
+      "a": "INC-OSPF-01",
+      "b": "INC-OSPF-02",
+      "reason": "Mirror events from opposite ends of one link; grouped per device."
+    },
+    {
+      "a": "INC-OSPF-01",
+      "b": "INC-OSPF-03",
+      "reason": "Different device and interface, overlapping time."
+    },
+    {
+      "a": "INC-BGP-01",
+      "b": "INC-BGP-02",
+      "reason": "Different device and peer, overlapping time (E064 and E065 fall between E063 and E066)."
+    }
+  ],
+  "background": {
+    "assert_grouping": false,
+    "event_ids": [
+      "E001",
+      "E002",
+      "E003",
+      "E004",
+      "E005",
+      "E006",
+      "E007",
+      "E008",
+      "E009",
+      "E010",
+      "E011",
+      "E029",
+      "E037",
+      "E038",
+      "E048",
+      "E056",
+      "E057",
+      "E058",
+      "E068",
+      "E075",
+      "E077",
+      "E078",
+      "E079",
+      "E080",
+      "E081",
+      "E084"
+    ],
+    "note": "Unrelated info/debug/notice noise (NTP, DHCP, LLDP, SNMP polling, firewall summaries, STP, config save, route table size, markers). E037 and E068 are core-rtr1 debug lines inside incident windows and must not join any incident."
+  },
+  "severity_totals": {
+    "0": 0,
+    "1": 0,
+    "2": 1,
+    "3": 7,
+    "4": 21,
+    "5": 28,
+    "6": 18,
+    "7": 9
+  }
+}
