@@ -162,6 +162,15 @@ $login = curl.exe -s -X POST http://localhost:3000/api/auth/login -H "Content-Ty
 curl.exe http://localhost:3000/api/auth/me -H "Authorization: Bearer $($login.token)"
 ```
 
+## Reports
+
+Once a log is loaded, the **Generate report** button in the header (next to **Open another log**) opens a small menu with two options:
+
+- **Log Summary** — total events, unparsed line count, the analysis time range, a table of devices (with per-device event/incident counts), the severity 0–7 breakdown, and a table of every incident (sorted by first seen) with a brief summary for each.
+- **Detailed Incident** — the currently selected incident's title, kind, device, interface/peer/source, processes, summary, severity distribution, and its *complete* timeline (every event, no 300-event cap), including each event's gap from the previous one, severity, process, message and raw line. Disabled (with a "Select an incident first" hint) until an incident is selected.
+
+Both reports are generated entirely in the browser and downloaded as a single, self-contained `.html` file (inline CSS, no external fonts or scripts, no network requests) — nothing about the log ever leaves the page. Filenames look like `syslog-lens-summary-<source>-<timestamp>.html` and `syslog-lens-incident-<incident>-<timestamp>.html`. Reports use a dark theme on screen and switch to a light, ink-saving theme (severity colours and labels preserved) when printed.
+
 ## Project files
 
 | Path | Purpose |

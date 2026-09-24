@@ -23,6 +23,15 @@ header{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:
 .btn{padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:var(--hi)}
 .btn:hover{border-color:var(--mute)}
 .btn.go{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:500}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:disabled:hover{border-color:var(--line)}
+.menuwrap{position:relative}
+.menu{position:absolute;top:calc(100% + 4px);right:0;z-index:20;min-width:220px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);padding:4px}
+.mi{display:block;width:100%;padding:8px 10px;border-radius:6px;font-size:13px}
+.mi:hover:not([aria-disabled="true"]){background:var(--hi)}
+.mi[aria-disabled="true"]{opacity:.5;cursor:default}
+.mi .hint{display:none;color:var(--mute);font-size:11.5px;margin-top:2px}
+.mi[aria-disabled="true"] .hint{display:block}
 [hidden]{display:none!important}
 #in{flex:1;overflow:auto;display:grid;place-items:center;padding:24px}
 .intake{width:min(720px,100%)}
@@ -115,6 +124,13 @@ ol.tl li::before{content:"";position:absolute;left:-27px;top:6px;width:10px;heig
  <div class="brand"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M17 17l6 6"/><path d="M7 11h8" stroke="var(--s3)"/></svg><div>Syslog Lens<small></small></div></div>
  <span class="badge">Parsed in your browser. Nothing is uploaded.</span><span class="sp"></span>
  <button class="btn" id="newb" hidden>Open another log</button>
+ <div class="menuwrap" id="reportWrap">
+  <button class="btn" id="reportb" type="button" aria-haspopup="menu" aria-expanded="false" disabled>Generate report</button>
+  <div class="menu" id="reportMenu" role="menu" aria-label="Generate report" hidden>
+   <button class="mi" id="miSummary" role="menuitem" type="button">Log Summary</button>
+   <button class="mi" id="miIncident" role="menuitem" type="button" aria-disabled="true">Detailed Incident<span class="hint" id="miHint">Select an incident first</span></button>
+  </div>
+ </div>
  <button class="btn" id="tzbtn" aria-label="Toggle timestamps between UTC and local time">Local</button>
  <button class="btn" id="th" aria-label="Toggle light or dark theme">Theme</button>
  <span class="badge" id="whoami" hidden></span>
@@ -142,7 +158,7 @@ const SN=['Emergency','Alert','Critical','Error','Warning','Notice','Information
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const GTITLE='Severity guessed from message keywords; this line had no <PRI> value',gtag=x=>x.guessed?`<span class="tag" title="${esc(GTITLE)}" aria-label="${esc(GTITLE)}">guessed</span>`:'';
 const MON='Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
-let D=null,sel=null,cur=null,name='pasted log';const SEC={sum:true,ov:true,tl:true,raw:false};
+let D=null,sel=null,cur=null,name='pasted log',currentUser=null;const SEC={sum:true,ov:true,tl:true,raw:false};
 
 function guess(m){return /emerg|panic/i.test(m)?0:/\balert/i.test(m)?1:/crit/i.test(m)?2:/err|fail|denied|\bdown\b/i.test(m)?3:/warn/i.test(m)?4:/notice/i.test(m)?5:/debug/i.test(m)?7:6}
 const WIN=300e3,IFR=/\b(?:[A-Za-z]+Ethernet|Ethernet|Vlan|Loopback|Tunnel|Serial|Port-channel|Po|Gi|Te|Fa|Eth)[\d\/.:]+/g,IPR=/\b\d{1,3}(?:\.\d{1,3}){3}\b/g;
@@ -265,7 +281,7 @@ function parse(text){
  return{ev,bad,by};
 }
 /* Exposed for automated tests only; not used by the UI itself. */
-if(typeof window!=='undefined')window.SyslogLens={parse,guess,describe,keys};
+if(typeof window!=='undefined')window.SyslogLens={parse,guess,describe,keys,gapInfo,buildSummaryReport,buildIncidentReport,summaryFilename,incidentFilename,reportGenTimestamp,reportTzOffset,generatedByLine,slug};
 
 /* UTC/local display toggle. Every timestamp the app *parses* keeps its real instant regardless
    of this setting (RFC 3164 and Cisco lines with no timezone of their own are parsed as local
@@ -275,21 +291,42 @@ if(typeof window!=='undefined')window.SyslogLens={parse,guess,describe,keys};
 const TZ_KEY='syslog-lens-tz';
 let tz='local';
 try{const saved=localStorage.getItem(TZ_KEY);if(saved==='utc')tz='utc'}catch{}
+/* Shared tz-toggle helpers, used by both the header button's own label
+   (tzLabel) and the downloadable reports (reportGenTimestamp/fnameTs/
+   reportTzOffset below), so every displayed or filename timestamp honours
+   the same 'local'/'utc' toggle consistently.
+   tzOffsetMin: the current UTC offset in minutes (0 when tz is 'utc'; the
+   viewer's real local offset - always "now"'s, matching prior behaviour -
+   otherwise).
+   tzParts: {y,mo,d,h,mi,s} for a given Date (default now), read via the
+   UTC or local getters depending on the toggle. */
+function tzOffsetMin(){return tz==='utc'?0:-new Date().getTimezoneOffset()}
+function tzParts(d){
+ const dt=d||new Date();
+ return tz==='utc'
+  ?{y:dt.getUTCFullYear(),mo:dt.getUTCMonth()+1,d:dt.getUTCDate(),h:dt.getUTCHours(),mi:dt.getUTCMinutes(),s:dt.getUTCSeconds()}
+  :{y:dt.getFullYear(),mo:dt.getMonth()+1,d:dt.getDate(),h:dt.getHours(),mi:dt.getMinutes(),s:dt.getSeconds()};
+}
 function tzLabel(){
  if(tz==='utc')return'UTC';
- const off=-new Date().getTimezoneOffset(),h=Math.trunc(off/60),mAbs=Math.abs(off)%60;
+ const off=tzOffsetMin(),h=Math.trunc(off/60),mAbs=Math.abs(off)%60;
  return'Local (UTC'+(off>=0?'+':'-')+Math.abs(h)+(mAbs?':'+String(mAbs).padStart(2,'0'):'')+')';
 }
 function syncTzBtn(){const b=$('#tzbtn');if(b)b.textContent=tzLabel()}
 function fmt(d){const o={day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'};if(tz==='utc')o.timeZone='UTC';return d.toLocaleString('en-GB',o)}
 function dur(ms){const s=Math.round(ms/1e3);if(s<1)return'0s';const h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;return(h?h+'h ':'')+(m?m+'m ':'')+(r||!(h||m)?r+'s':'')}
+/* Gap from the previous event in a chronologically-sorted event array, at index j.
+   ms is the raw gap in milliseconds (0 for the first event); text is the display
+   string used both by the timeline (show(), below) and by the Detailed Incident
+   report, so the two never drift apart. */
+function gapInfo(e,j){const ms=j?e[j].t-e[j-1].t:0;return{ms,text:j?'+'+dur(ms):''}}
 const step=n=>$('#app').dataset.step=n;
 
 function load(text,nm){
  const d=parse(text);
  if(!d.ev.length){$('#err').textContent='No syslog lines could be read. Check that lines start with a timestamp (RFC 3164 or 5424).';return}
  $('#err').textContent='';D=d;name=nm||'pasted log';
- $('#in').hidden=true;$('#app').hidden=false;$('#newb').hidden=false;
+ $('#in').hidden=true;$('#app').hidden=false;$('#newb').hidden=false;$('#reportb').disabled=false;
  midResize.restore();
  const first=d.by.findIndex(a=>a.length);sel=null;cur=null;
  renderMeta();
@@ -324,12 +361,196 @@ function show(k){
  <details class="sec" data-sec="ov"${SEC.ov?' open':''}><summary>Event overview</summary><div class="body"><dl class="sum"><div><dt>Events</dt><dd>${e.length}</dd></div><div><dt>First seen</dt><dd>${fmt(a)}</dd></div><div><dt>Last seen</dt><dd>${fmt(b)}</dd></div><div><dt>Duration</dt><dd>${dur(span)}</dd></div><div><dt>Processes</dt><dd>${esc(i.proc)}</dd></div><div class="wide"><dt>Severities</dt><dd>${bd(i,sel)}</dd></div></dl>
  <div class="spark" aria-hidden="true">${bk.map(n=>`<i style="height:${n/mx*100}%;${n?'':'opacity:.15'}"></i>`).join('')}</div><div class="cap">Events over time</div></div></details>
  <details class="sec" data-sec="tl"${SEC.tl?' open':''}><summary>Timeline <span class="cnt">${pl(e.length,'event')}</span></summary><div class="body"><p class="cap">Events at the selected severity are highlighted. Spacing grows with the silence between events.</p>
- <ol class="tl">${e.slice(0,300).map((x,j)=>{const g=j?x.t-e[j-1].t:0,h=j?Math.round(Math.min(96,8+Math.log10(1+g/1e3)*26)):0;
-  return`<li style="margin-top:${h}px;--c:var(--s${x.sev})"${x.sev===sel?"":' class="dim"'}>${j?`<span class="gap">+${dur(g)}</span>`:''}<time>${fmt(x.t)}</time><b class="ev">${x.sev} ${SN[x.sev]}</b>${gtag(x)}<p>${esc(x.msg)}</p><details><summary>raw line</summary><code>${esc(x.raw)}</code></details></li>`}).join('')}</ol>
+ <ol class="tl">${e.slice(0,300).map((x,j)=>{const gi=gapInfo(e,j),h=j?Math.round(Math.min(96,8+Math.log10(1+gi.ms/1e3)*26)):0;
+  return`<li style="margin-top:${h}px;--c:var(--s${x.sev})"${x.sev===sel?"":' class="dim"'}>${j?`<span class="gap">${gi.text}</span>`:''}<time>${fmt(x.t)}</time><b class="ev">${x.sev} ${SN[x.sev]}</b>${gtag(x)}<p>${esc(x.msg)}</p><details><summary>raw line</summary><code>${esc(x.raw)}</code></details></li>`}).join('')}</ol>
  ${e.length>300?`<p class="cap">Showing the first 300 of ${e.length} events.</p>`:''}</div></details>
  <details class="sec" data-sec="raw"${SEC.raw?' open':''}><summary>Raw event details</summary><div class="body"><pre class="raw">${e.slice(0,300).map(x=>(x.guessed?gtag(x)+' ':'')+esc(x.raw)).join('\n')}</pre></div></details>`;
  step(3);$('#c3').scrollTop=0;
 }
+
+/* ---- Report generation (browser-only; no new parsing/grouping) --------
+   Builds self-contained, downloadable .html reports from the SAME D/inc
+   structures the app already renders. Every function here is pure: given
+   its arguments (plus the current tz/theme-independent formatting via
+   fmt()/dur()/tzLabel()), it returns an HTML string. Nothing touches the
+   DOM or the network, so these are exercised directly by tests via
+   window.SyslogLens and reused unchanged by the download handlers below. */
+function slug(s){return(String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'log').slice(0,80)}
+function fnameTs(d){const p2=n=>String(n).padStart(2,'0'),{y,mo,d:da,h,mi,s}=tzParts(d);return`${y}${p2(mo)}${p2(da)}-${p2(h)}${p2(mi)}${p2(s)}`}
+function summaryFilename(source,d){return`syslog-lens-summary-${slug(source)}-${fnameTs(d)}.html`}
+function incidentFilename(title,d){return`syslog-lens-incident-${slug(title)}-${fnameTs(d)}.html`}
+/* Timezone offset text for the report header, e.g. "UTC" or "UTC+08:00" -
+   distinct from tzLabel() (which drives the header toggle button's own
+   "Local (UTC+8)" label) because the report spells out a fixed HH:MM form
+   regardless of which one is shorter. Both honour the same tz toggle. */
+function reportTzOffset(){
+ if(tz==='utc')return'UTC';
+ const off=tzOffsetMin(),sign=off>=0?'+':'-',h=Math.floor(Math.abs(off)/60),m=Math.abs(off)%60;
+ return'UTC'+sign+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+function reportGenTimestamp(d){
+ const p2=n=>String(n).padStart(2,'0'),{y,mo,d:da,h,mi,s}=tzParts(d);
+ return`${y}-${p2(mo)}-${p2(da)} ${p2(h)}:${p2(mi)}:${p2(s)} (${reportTzOffset()})`;
+}
+function generatedByLine(user){return(user&&user.name&&user.employeeNumber)?`Generated by ${esc(user.name)} (${esc(user.employeeNumber)})`:'Generated by: unknown user'}
+function reportCSS(){return`
+:root{--bg:#0e131a;--panel:#151c26;--ink:#e4e9f0;--mute:#8a95a6;--line:#242d3a;
+--s0:#d1006f;--s1:#e0245e;--s2:#f0463a;--s3:#f97316;--s4:#e5a800;--s5:#12a6bd;--s6:#4c8dff;--s7:#8a93a3;
+--sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 32px 60px;background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans)}
+h1,h2,h3{font-weight:600;letter-spacing:-.01em}
+h1{font-size:21px;margin:0 0 4px}
+h2{font-size:16px;margin:28px 0 10px;padding-top:12px;border-top:1px solid var(--line)}
+h3{font-size:14px;margin:16px 0 4px}
+table{border-collapse:collapse;width:100%;margin:8px 0 18px;font-size:12.5px}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--panel);font-weight:600}
+code,.raw{font-family:var(--mono)}
+.raw{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel);padding:5px 7px;border-radius:4px;display:block;font-size:11.5px}
+.hdr{border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:18px}
+.hdr .meta{color:var(--mute);font-size:12.5px;margin-top:6px;line-height:1.7}
+.tag{display:inline-block;margin-left:4px;padding:0 5px;border:1px solid var(--line);border-radius:3px;font:500 10px var(--mono);color:var(--mute)}
+footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--mute);font-size:12px}
+footer p{margin:4px 0}
+@media print{
+ :root{--bg:#ffffff;--panel:#f3f4f6;--ink:#111418;--mute:#5b6472;--line:#d7dbe2;
+ --s0:#d1006f;--s1:#e0245e;--s2:#f0463a;--s3:#c2410c;--s4:#a16207;--s5:#0e7f92;--s6:#1d4ed8;--s7:#5b6472}
+ body{padding:0 6px}
+ th{background:#eef0f3}
+}`}
+function reportHeaderHTML(type,source,user,rangeStr,genDate){
+ /* generatedByLine() already escapes the user-supplied name/employeeNumber
+    it interpolates, so it must not be passed through esc() again here -
+    doing so would turn "&amp;" into "&amp;amp;" etc. */
+ return`<div class="hdr"><h1>Syslog Lens — ${esc(type)}</h1><div class="meta">Source: <code>${esc(source)}</code><br>
+${generatedByLine(user)}<br>
+Generated: ${esc(reportGenTimestamp(genDate))}<br>
+Log time range: ${esc(rangeStr)}</div></div>`;
+}
+function reportFooterHTML(){
+ return`<footer><p>Incident summaries are generated from the parsed log events and describe the observed sequence; they are not a diagnosis or confirmation of root cause.</p>
+<p>Syslog Lens parses logs in the browser. Log data is not uploaded.</p></footer>`;
+}
+function rangeStrOf(evs){return evs.length?`${fmt(evs[0].t)} to ${fmt(evs.at(-1).t)} (${dur(evs.at(-1).t-evs[0].t)})`:'n/a'}
+function buildSummaryReport(D,source,user,genDate){
+ const incs=[...new Set(D.by.flat())];
+ const rangeStr=rangeStrOf(D.ev);
+ const devMap=new Map();
+ D.ev.forEach(e=>{if(!devMap.has(e.host))devMap.set(e.host,{events:0,incidents:new Set()});devMap.get(e.host).events++});
+ /* Every incident's host comes from one of its own events' hosts (see
+    describe()'s es[0].host), so it's always already a key in devMap above -
+    no existence check needed here. */
+ incs.forEach(i=>devMap.get(i.host).incidents.add(i));
+ const devRows=[...devMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]))
+  .map(([host,v])=>`<tr><td>${esc(host)}</td><td>${v.events}</td><td>${v.incidents.size}</td></tr>`).join('');
+ const sevRows=SN.map((n,i)=>{const c=D.ev.filter(e=>e.sev===i).length;return`<tr><td style="color:var(--s${i})">${i}</td><td style="color:var(--s${i})">${esc(n)}</td><td>${c}</td></tr>`}).join('');
+ const sortedIncs=[...incs].sort((a,b)=>a.ev[0].t-b.ev[0].t);
+ const incRows=sortedIncs.map(i=>`<tr><td>${esc(i.title)}</td><td>${esc(i.host)}</td><td>${esc(i.subject||'')}</td><td>${i.ev.length}</td><td>${dur(i.ev.at(-1).t-i.ev[0].t)}</td><td>${fmt(i.ev[0].t)}</td><td>${fmt(i.ev.at(-1).t)}</td><td>${bd(i,-1)}</td></tr>`).join('');
+ const incSummaries=sortedIncs.map(i=>`<div><h3>${esc(i.title)}</h3><p>${i.summary}</p></div>`).join('');
+ return`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Syslog Lens — Log Summary — ${esc(source)}</title><style>${reportCSS()}</style></head><body>
+${reportHeaderHTML('Log Summary',source,user,rangeStr,genDate)}
+<h2>Overview</h2>
+<table><tbody>
+<tr><th>Total parsed events</th><td>${D.ev.length}</td></tr>
+<tr><th>Unparsed lines</th><td>${D.bad.length}</td></tr>
+<tr><th>Analysis time range</th><td>${esc(rangeStr)}</td></tr>
+</tbody></table>
+<h2>Devices</h2>
+<table><thead><tr><th>Device</th><th>Events</th><th>Incidents</th></tr></thead><tbody>${devRows||'<tr><td colspan="3">No devices.</td></tr>'}</tbody></table>
+<h2>Severity breakdown</h2>
+<table><thead><tr><th>#</th><th>Name</th><th>Count</th></tr></thead><tbody>${sevRows}</tbody></table>
+<h2>Incidents (${incs.length})</h2>
+<table><thead><tr><th>Title</th><th>Device</th><th>Subject</th><th>Events</th><th>Duration</th><th>First seen</th><th>Last seen</th><th>Severities</th></tr></thead><tbody>${incRows||'<tr><td colspan="8">No incidents.</td></tr>'}</tbody></table>
+<h2>Incident summaries</h2>
+${incSummaries||'<p>No incidents.</p>'}
+${reportFooterHTML()}
+</body></html>`;
+}
+function buildIncidentReport(inc,source,user,genDate){
+ const e=inc.ev,rangeStr=rangeStrOf(e);
+ const sevRows=inc.sevs.map(v=>{const n=e.filter(x=>x.sev===v).length;return`<tr><td style="color:var(--s${v})">${v}</td><td style="color:var(--s${v})">${esc(SN[v])}</td><td>${n}</td></tr>`}).join('');
+ const rows=e.map((x,j)=>{const gi=gapInfo(e,j);
+  return`<tr><td>${j+1}</td><td>${fmt(x.t)}</td><td>${j?esc(gi.text):'—'}</td><td style="color:var(--s${x.sev})">${x.sev} ${esc(SN[x.sev])} ${gtag(x)}</td><td>${esc(x.proc)}</td><td>${esc(x.msg)}</td><td><code class="raw">${esc(x.raw)}</code></td></tr>`}).join('');
+ return`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Syslog Lens — Detailed Incident — ${esc(inc.title)}</title><style>${reportCSS()}</style></head><body>
+${reportHeaderHTML('Detailed Incident',source,user,rangeStr,genDate)}
+<h2>${esc(inc.title)}</h2>
+<table><tbody>
+<tr><th>Kind</th><td>${esc(inc.kind)}</td></tr>
+<tr><th>Device</th><td>${esc(inc.host)}</td></tr>
+<tr><th>Interface / peer / source</th><td>${esc(inc.subject||'')}</td></tr>
+<tr><th>Processes</th><td>${esc(inc.proc)}</td></tr>
+<tr><th>First seen</th><td>${fmt(e[0].t)}</td></tr>
+<tr><th>Last seen</th><td>${fmt(e.at(-1).t)}</td></tr>
+<tr><th>Duration</th><td>${dur(e.at(-1).t-e[0].t)}</td></tr>
+</tbody></table>
+<h2>Summary</h2>
+<p>${inc.summary}</p>
+<h2>Severity distribution</h2>
+<table><thead><tr><th>#</th><th>Name</th><th>Count</th></tr></thead><tbody>${sevRows}</tbody></table>
+<h2>Timeline (${e.length} event${e.length===1?'':'s'})</h2>
+<table><thead><tr><th>#</th><th>Timestamp</th><th>Gap</th><th>Severity</th><th>Process</th><th>Message</th><th>Raw line</th></tr></thead><tbody>${rows}</tbody></table>
+${reportFooterHTML()}
+</body></html>`;
+}
+function downloadHTML(html,filename){
+ const blob=new Blob([html],{type:'text/html'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>{try{URL.revokeObjectURL(url)}catch{}},1000);
+}
+/* Same-origin /api/auth/me lookup, shared by the sign-in banner (see the
+   auth IIFE near the bottom of this script) and resolveReportUser() below.
+   Deliberately a no-op wherever there's no real server to talk to (file://,
+   or the jsdom test loader where fetch is undefined). Returns the user
+   object, {unauthorized:true} on a 401, or null on any other failure. */
+async function fetchMe(){
+ if(typeof fetch!=='function')return null;
+ let res;
+ try{res=await fetch('/api/auth/me',{credentials:'same-origin'})}
+ catch(e){return null} // no server reachable (e.g. file://) - stay silent
+ if(!res||res.status===401)return{unauthorized:res&&res.status===401};
+ if(!res.ok)return null;
+ try{return await res.json()}catch(e){return null}
+}
+function applyUser(u){
+ if(!u||u.unauthorized)return;
+ currentUser=u;
+ const whoEl=$('#whoami'),logoutBtn=$('#logoutb');
+ if(whoEl){whoEl.hidden=false;whoEl.textContent=`Signed in as ${u.name} (${u.employeeNumber})`}
+ if(logoutBtn)logoutBtn.hidden=false;
+}
+/* Report builders are pure (see the comment above reportHeaderHTML) and must
+   stay that way, so the "who generated this" lookup happens here, one level
+   up, right before a download is built - not inside the builders. If a
+   report is requested before the sign-in banner's own startup fetch (below)
+   has resolved, currentUser can still be null; in that case fetch it now
+   rather than let the report fall back to "unknown user" while a real
+   session exists. A 401 here means the session has expired/is invalid, so
+   redirect to /login exactly like the startup fetch does. Any other failure
+   (no server, network error, bad JSON) falls back to null, which the
+   builders already render as "Generated by: unknown user".              */
+async function resolveReportUser(){
+ if(currentUser)return currentUser;
+ const u=await fetchMe();
+ if(u&&u.unauthorized){location.replace('/login');return{unauthorized:true}}
+ applyUser(u);
+ return u&&!u.unauthorized?u:null;
+}
+async function downloadSummaryReport(){
+ if(!D)return;
+ const user=await resolveReportUser();
+ if(user&&user.unauthorized)return; // session expired - already redirecting to /login
+ downloadHTML(buildSummaryReport(D,name,user),summaryFilename(name));
+}
+async function downloadIncidentReport(){
+ if(!D||sel==null||cur==null)return;
+ const inc=D.by[sel][cur];if(!inc)return;
+ const user=await resolveReportUser();
+ if(user&&user.unauthorized)return; // session expired - already redirecting to /login
+ downloadHTML(buildIncidentReport(inc,name,user),incidentFilename(inc.title));
+}
+/* Exposed for automated tests only; not used by the UI itself. */
+if(typeof window!=='undefined')Object.assign(window.SyslogLens,{fetchMe,resolveReportUser,downloadSummaryReport,downloadIncidentReport});
 
 $('#rail').onclick=e=>{const b=e.target.closest('.sv');if(b&&!b.disabled)pick(+b.dataset.s)};
 $('#list').onclick=e=>{const b=e.target.closest('.inc');if(b)show(+b.dataset.i)};
@@ -358,7 +579,32 @@ const midResize=(()=>{const app=$('#app'),rz=$('#rz'),c2=$('#c2'),MIN=260,RIGHT=
 $('#detail').addEventListener('toggle',e=>{const d=e.target;if(d.dataset&&d.dataset.sec){SEC[d.dataset.sec]=d.open;const b=$('#tgl');if(b)b.textContent=Object.values(SEC).some(Boolean)?'Collapse all':'Expand all'}},true);
 $('#detail').onclick=e=>{if(e.target.closest('#tgl')){const any=Object.values(SEC).some(Boolean);document.querySelectorAll('#detail details[data-sec]').forEach(d=>d.open=!any)}};
 document.querySelectorAll('.back').forEach(b=>b.onclick=()=>step(b.dataset.to));
-$('#newb').onclick=()=>{$('#app').hidden=true;$('#in').hidden=false;$('#newb').hidden=true};
+$('#newb').onclick=()=>{$('#app').hidden=true;$('#in').hidden=false;$('#newb').hidden=true;$('#reportb').disabled=true;closeReportMenu()};
+
+/* "Generate report" menu: a minimal accessible popup menu (keyboard + Escape,
+   aria-expanded/aria-haspopup, aria-disabled on the item that needs an
+   incident selected) opening onto the two pure report builders above. */
+const reportWrap=$('#reportWrap'),reportBtn=$('#reportb'),reportMenu=$('#reportMenu'),miSummary=$('#miSummary'),miIncident=$('#miIncident');
+function syncIncidentMenuItem(){
+ const has=!!(D&&sel!=null&&cur!=null&&D.by[sel]&&D.by[sel][cur]);
+ miIncident.setAttribute('aria-disabled',has?'false':'true');
+}
+function closeReportMenu(){reportMenu.hidden=true;reportBtn.setAttribute('aria-expanded','false')}
+function openReportMenu(){
+ if(reportBtn.disabled)return;
+ syncIncidentMenuItem();
+ reportMenu.hidden=false;reportBtn.setAttribute('aria-expanded','true');
+ miSummary.focus();
+}
+reportBtn.onclick=()=>{reportMenu.hidden?openReportMenu():closeReportMenu()};
+reportMenu.addEventListener('keydown',e=>{
+ if(e.key==='Escape'){e.stopPropagation();closeReportMenu();reportBtn.focus();return}
+ if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();(document.activeElement===miSummary?miIncident:miSummary).focus()}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!reportMenu.hidden){closeReportMenu();reportBtn.focus()}});
+document.addEventListener('click',e=>{if(!reportMenu.hidden&&!reportWrap.contains(e.target))closeReportMenu()});
+miSummary.onclick=()=>{closeReportMenu();downloadSummaryReport()};
+miIncident.onclick=()=>{if(miIncident.getAttribute('aria-disabled')==='true')return;closeReportMenu();downloadIncidentReport()};
 $('#parse').onclick=()=>{const t=$('#paste').value;t.trim()?load(t,'pasted log'):$('#err').textContent='Paste some log text or choose a file first.'};
 function readFile(f){if(!f)return;const r=new FileReader();r.onload=()=>load(r.result,f.name);r.onerror=()=>$('#err').textContent='That file could not be read.';r.readAsText(f)}
 $('#file').onchange=e=>readFile(e.target.files[0]);
@@ -378,23 +624,14 @@ $('#demo').onclick=()=>load(SAMPLE_LOG,'network-incidents.log');
    only in an httpOnly cookie set by the server — nothing here stores it.
    Deliberately a no-op wherever there's no real server to talk to (file://,
    or the jsdom test loader where fetch is undefined), so it never affects
-   existing tests or the file:// usage flow described in README.md. */
+   existing tests or the file:// usage flow described in README.md.
+   fetchMe()/applyUser() are defined above (near the report download
+   handlers) and shared with resolveReportUser(), so a report requested
+   before this startup fetch resolves reuses the same lookup instead of
+   racing it. */
 (function(){
  if(typeof fetch!=='function')return;
- const whoEl=$('#whoami'),logoutBtn=$('#logoutb');
- async function fetchMe(){
-  let res;
-  try{res=await fetch('/api/auth/me',{credentials:'same-origin'})}
-  catch(e){return null} // no server reachable (e.g. file://) - stay silent
-  if(!res||res.status===401)return{unauthorized:res&&res.status===401};
-  if(!res.ok)return null;
-  try{return await res.json()}catch(e){return null}
- }
- function applyUser(u){
-  if(!u||u.unauthorized)return;
-  if(whoEl){whoEl.hidden=false;whoEl.textContent=`Signed in as ${u.name} (${u.employeeNumber})`}
-  if(logoutBtn)logoutBtn.hidden=false;
- }
+ const logoutBtn=$('#logoutb');
  fetchMe().then(u=>{if(u&&u.unauthorized){location.replace('/login');return}applyUser(u)});
  if(logoutBtn)logoutBtn.onclick=async()=>{
   try{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})}catch(e){}
