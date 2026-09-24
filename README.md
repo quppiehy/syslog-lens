@@ -67,7 +67,30 @@ npm install
 cp .env.example .env
 ```
 
-`.env` controls `PORT` (default `3000`), `DB_STORAGE` (default `server/data/syslog-lens.sqlite`, created automatically if missing), `JWT_SECRET`, `JWT_EXPIRES_IN` (default `8h`), and `COOKIE_SECURE` (default `false`; set `true` when serving over HTTPS so the auth cookie is marked `Secure`).
+`.env` controls `PORT` (default `3000`), `DB_STORAGE` (default `server/data/syslog-lens.sqlite`, created automatically if missing), `JWT_SECRET`, `JWT_EXPIRES_IN` (default `8h`), and `COOKIE_SECURE` (default `false`; set `true` when serving over HTTPS so the auth cookie is marked `Secure`, which also enables HSTS — see below).
+
+### Environment variables
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PORT` | `3000` | Port Express listens on. |
+| `DB_STORAGE` | `server/data/syslog-lens.sqlite` | SQLite file path (or `:memory:` for tests). |
+| `JWT_SECRET` | *(required)* | Signs auth JWTs; must be ≥32 characters. |
+| `JWT_EXPIRES_IN` | `8h` | JWT/cookie lifetime (`jsonwebtoken` `expiresIn` format). |
+| `COOKIE_SECURE` | `false` | Marks the auth cookie `Secure`; also gates whether HSTS is sent. Set `true` behind HTTPS. |
+| `INVITE_CODE` | *(unset)* | Required in `POST /api/auth/register` body as `inviteCode` whenever set. **Required in production** (`NODE_ENV=production`) — the server refuses to start without one ≥12 characters. Optional in dev/test: leave unset to skip the check entirely. |
+| `TRUST_PROXY` | `false` | Express `trust proxy` setting, used to derive the real client IP (`req.ip`) for rate limiting behind a reverse proxy. Set to `1` on Vercel (a single trusted edge proxy); leave `false` for local development. Accepts `true`/`false`, a hop count, or an Express-style proxy list. |
+| `LOGIN_EMP_MAX_ATTEMPTS` | `5` | Failed logins for one employee number, within `LOGIN_EMP_WINDOW_MS`, before that employee number is locked for `LOGIN_EMP_LOCK_MS`. |
+| `LOGIN_EMP_WINDOW_MS` | `900000` (15 min) | Rolling window for the per-employee counter. |
+| `LOGIN_EMP_LOCK_MS` | `900000` (15 min) | Lockout duration once the per-employee limit is hit. |
+| `LOGIN_IP_MAX_ATTEMPTS` | `20` | Failed logins from one IP, within `LOGIN_IP_WINDOW_MS`, before that IP is locked for `LOGIN_IP_LOCK_MS`. |
+| `LOGIN_IP_WINDOW_MS` | `900000` (15 min) | Rolling window for the per-IP login counter. |
+| `LOGIN_IP_LOCK_MS` | `900000` (15 min) | Lockout duration once the per-IP login limit is hit. |
+| `REGISTER_IP_MAX_ATTEMPTS` | `10` | Registration attempts from one IP, within `REGISTER_IP_WINDOW_MS`, before that IP is locked for `REGISTER_IP_LOCK_MS`. |
+| `REGISTER_IP_WINDOW_MS` | `3600000` (1 hour) | Rolling window for the per-IP register counter. |
+| `REGISTER_IP_LOCK_MS` | `3600000` (1 hour) | Lockout duration once the per-IP register limit is hit. |
+
+All rate-limit counters are stored in the database (a `LoginAttempt` model/table), not in memory — this is required so the limits are enforced correctly across multiple stateless server instances (e.g. Vercel serverless functions), where an in-process counter would be per-instance and trivially bypassable.
 
 `JWT_SECRET` is **required** — the server refuses to start if it's missing or shorter than 32 characters. Generate a strong one with:
 
@@ -97,9 +120,15 @@ npm run db:check
 
 which prints the columns of the `users` table.
 
+### Security headers
+
+Every response carries `helmet`-managed security headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, a `Content-Security-Policy`, and (only when `COOKIE_SECURE=true`) `Strict-Transport-Security`. The CSP's `script-src` allows `'self'` plus a `sha256-` hash per inline `<script>` block found in `syslog-lens.html` and `public/*.html` at startup — no `'unsafe-inline'` for scripts. `style-src` allows `'unsafe-inline'` (the pages use inline `<style>`) plus Google Fonts' stylesheet host; `font-src` allows Google Fonts' font host; `connect-src`/`img-src`/`object-src`/`base-uri`/`form-action`/`frame-ancestors` are locked down to `'self'` (plus `data:`/`blob:` for images, used by report generation).
+
 ### Registration
 
 `POST /api/auth/register` creates a new user. It expects a JSON body with `name`, `employeeNumber` and `password` (all strings). `name` and `employeeNumber` must be non-empty after trimming, `employeeNumber` must be unique, and `password` must be at least 8 characters (checked on the raw, untrimmed value). Passwords are hashed with a salted `scrypt` (Node's built-in `crypto`) before storage — the plaintext is never stored, logged, or returned.
+
+If `INVITE_CODE` is configured (required in production), the body must also include a matching `inviteCode` string; a missing/wrong one returns `403 {"error":"Invalid invite code"}`, checked **before** the duplicate-`employeeNumber` check so it can never be used to probe which employee numbers already exist. In production (`NODE_ENV=production`), a missing/invalid `INVITE_CODE` is fail-closed, not fail-open: the app refuses to start at all (`server/config.js`'s `assertProductionConfig()`, run when `server/app.js` is loaded), and as a second, independent guard the register handler itself also returns `503 {"error":"Registration is not configured"}` rather than silently accepting registrations without an invite code. The comparison uses `crypto.timingSafeEqual` over fixed-length sha256 hashes of both values (not the raw strings), so it can't leak the code's length or content via timing. Registration is also rate-limited per IP (`REGISTER_IP_MAX_ATTEMPTS` per `REGISTER_IP_WINDOW_MS`, default 10/hour); once hit, further attempts return `429 {"error":"Too many attempts. Try again later."}` with a `Retry-After` header until `REGISTER_IP_LOCK_MS` elapses.
 
 ```bash
 curl -X POST http://localhost:3000/api/auth/register \
@@ -136,6 +165,12 @@ curl -X POST http://localhost:3000/api/auth/login \
 should return `200` with `{"token":"<jwt>","user":{"id":1,"name":"Ada Lovelace","employeeNumber":"EMP-001"}}`. An unknown `employeeNumber` or a wrong `password` both return `401` with the identical body `{"error":"Invalid employee number or password"}` (this is intentional, to avoid revealing which case occurred); missing/empty/non-string fields return `400`.
 
 The token is signed HS256, carries `sub` (the user id, as a string), `employeeNumber` and `name` as claims, and expires after `JWT_EXPIRES_IN` (default `8h`).
+
+Login is rate-limited two ways, both DB-backed (never in-memory, so it holds across multiple stateless server instances): per `employeeNumber` (`LOGIN_EMP_MAX_ATTEMPTS` failures within `LOGIN_EMP_WINDOW_MS`, default 5/15min) and per IP (`LOGIN_IP_MAX_ATTEMPTS` within `LOGIN_IP_WINDOW_MS`, default 20/15min) — including an `employeeNumber` that isn't registered at all, so a locked-out unknown employee number also returns `429`, not `401`. Once locked, requests return `429 {"error":"Too many attempts. Try again later."}` with a `Retry-After` header (seconds) until the lock (`LOGIN_EMP_LOCK_MS` / `LOGIN_IP_LOCK_MS`) expires. A successful login resets that employee's failure counter. `req.ip` (used as the rate-limit key) is derived per `TRUST_PROXY` — see the environment variable table above.
+
+**Trade-off:** the per-employee lock is keyed only on `employeeNumber`, which is not a secret — anyone who knows (or guesses) a valid employee number can deliberately lock that account for `LOGIN_EMP_LOCK_MS` (15 minutes by default) just by submitting a few wrong passwords for it, without needing to know anything else about the account. This is accepted as a reasonable trade-off for an invite-only internal tool with a small, known user base, where that risk is low and the alternative (no per-account lock) would make credential-stuffing a single account trivial. The per-IP limiter still bounds how many different employee numbers one source can hammer this way.
+
+**`TRUST_PROXY` matters here:** if the app runs behind any reverse proxy or edge network (e.g. Vercel) and `TRUST_PROXY` is left at its default (`false`), `req.ip` resolves to the proxy's own address for every request, not the real client's — so the per-IP counter (and its rate-limit key) end up shared by *all* clients behind that proxy. In practice this means either everyone gets rate-limited together after a burst of unrelated traffic, or (depending on how the proxy is set up) the per-IP limit stops meaningfully distinguishing clients at all. Set `TRUST_PROXY` to the correct hop count (`1` on Vercel) whenever the app is not receiving connections directly.
 
 On Windows PowerShell, use single quotes around the JSON body and escape the inner double quotes, e.g.:
 

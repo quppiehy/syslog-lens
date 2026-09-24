@@ -4,17 +4,64 @@
 // or requiring a real startup sequence.
 const path = require('path');
 const express = require('express');
+const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const sequelize = require('./db');
 require('./models/user'); // register the User model with Sequelize
+require('./models/loginAttempt'); // register the LoginAttempt model with Sequelize
 const authRouter = require('./routes/auth');
 const { requirePage, resolveUser } = require('./middleware/auth');
+const { TRUST_PROXY, COOKIE_SECURE, assertProductionConfig } = require('./config');
+const { computeInlineScriptHashes } = require('./lib/csp');
+
+// Fail closed at module load, not just in server/index.js's own startup
+// sequence: any entry point that imports this module directly (e.g. a
+// future serverless/Vercel handler) must not be able to skip the
+// production JWT_SECRET/INVITE_CODE checks. No-op outside production.
+assertProductionConfig();
 
 const app = express();
+
+// Needed for req.ip (and therefore per-IP rate limiting) to reflect the
+// real client address when running behind a reverse proxy / edge network
+// (e.g. Vercel) rather than the proxy's own address. Off by default — see
+// server/config.js for how TRUST_PROXY is parsed.
+app.set('trust proxy', TRUST_PROXY);
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const PUBLIC_DIR = path.join(PROJECT_ROOT, 'public');
 const APP_HTML_PATH = path.join(PROJECT_ROOT, 'syslog-lens.html');
+
+// Computed once at startup: sha256 hashes of every inline <script> block in
+// syslog-lens.html and public/*.html, so the CSP below can allow exactly
+// those blocks without 'unsafe-inline'.
+const INLINE_SCRIPT_HASHES = computeInlineScriptHashes();
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", ...INLINE_SCRIPT_HASHES],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        connectSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        objectSrc: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    frameguard: { action: 'deny' },
+    noSniff: true,
+    referrerPolicy: { policy: 'no-referrer' },
+    // HSTS only makes sense (and is only safe to advertise) once the app is
+    // actually served over HTTPS with a Secure cookie — advertising it over
+    // plain http://localhost in dev would just be misleading.
+    hsts: COOKIE_SECURE ? { maxAge: 15552000, includeSubDomains: true } : false,
+  })
+);
 
 app.use(express.json());
 app.use(cookieParser());

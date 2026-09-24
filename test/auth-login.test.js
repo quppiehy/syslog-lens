@@ -7,6 +7,8 @@
 process.env.DB_STORAGE = ':memory:';
 process.env.JWT_SECRET = 'test-jwt-secret-at-least-32-characters-long';
 process.env.JWT_EXPIRES_IN = '8h';
+process.env.INVITE_CODE = '';
+process.env.REGISTER_IP_MAX_ATTEMPTS = '1000'; // many registerUser() setup calls in this file
 
 const test = require('node:test');
 const assert = require('node:assert/strict');

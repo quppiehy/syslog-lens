@@ -12,6 +12,7 @@ process.env.DB_STORAGE = ':memory:';
 process.env.JWT_SECRET = 'e2e-test-jwt-secret-at-least-32-characters-long';
 process.env.JWT_EXPIRES_IN = '8h';
 process.env.COOKIE_SECURE = 'false';
+process.env.INVITE_CODE = 'e2e-test-invite-code-12345';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -76,6 +77,7 @@ test(
       await page.fill('#employeeNumber', employeeNumber);
       await page.fill('#password', password);
       await page.fill('#confirmPassword', password);
+      await page.fill('#inviteCode', process.env.INVITE_CODE);
       await page.click('#submitBtn');
       await page.waitForURL(/\/login\?registered=1/);
       const notice = await page.locator('#notice').innerText();

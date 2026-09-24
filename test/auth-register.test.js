@@ -5,6 +5,12 @@
 // HTTP client dependency is required.
 
 process.env.DB_STORAGE = ':memory:';
+process.env.INVITE_CODE = 'test-invite-code-12345';
+// This file registers many more than the default 10/hour register-per-IP
+// limit (Stage A) as part of exercising unrelated validation paths — raise
+// the ceiling so those assertions aren't cross-contaminated by rate limiting
+// (register rate limiting itself is covered by test/register-rate-limit.test.js).
+process.env.REGISTER_IP_MAX_ATTEMPTS = '1000';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -35,7 +41,15 @@ function uniqueEmployeeNumber() {
   return `EMP-${process.pid}-${counter}`;
 }
 
-async function register(body, { rawBody } = {}) {
+// Every test in this file registers against a real INVITE_CODE (see above),
+// so the helper defaults `inviteCode` in unless the test explicitly passes
+// its own (e.g. to test wrong/missing invite code behavior).
+function register(body, { rawBody } = {}) {
+  const withInvite = rawBody !== undefined ? body : { inviteCode: process.env.INVITE_CODE, ...body };
+  return registerRaw(withInvite, { rawBody });
+}
+
+async function registerRaw(body, { rawBody } = {}) {
   const res = await fetch(`${baseUrl}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
