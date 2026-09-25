@@ -5,13 +5,16 @@
 :root{
   --bg:#e9edf1;--panel:#f7f9fb;--ink:#141a22;--mute:#5d6877;--line:#d5dbe3;--hi:#ffffff;
   --s2:#f0463a;--s6:#4c8dff;
+  --field-bg:#ffffff;--field-border:#7c8aa0;--field-border-hover:#5f6f85;--label-ink:#3c4654;
   --sans:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
   box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){--bg:#0e131a;--panel:#151c26;--ink:#e4e9f0;--mute:#8a95a6;--line:#242d3a;--hi:#1b2431}
+  :root:not([data-theme="light"]){--bg:#0e131a;--panel:#151c26;--ink:#e4e9f0;--mute:#9aa5b6;--line:#242d3a;--hi:#1b2431;
+    --field-bg:#202a3b;--field-border:#647692;--field-border-hover:#7f92ad;--label-ink:#b7c0cd}
 }
-:root[data-theme="dark"]{--bg:#0e131a;--panel:#151c26;--ink:#e4e9f0;--mute:#8a95a6;--line:#242d3a;--hi:#1b2431}
+:root[data-theme="dark"]{--bg:#0e131a;--panel:#151c26;--ink:#e4e9f0;--mute:#9aa5b6;--line:#242d3a;--hi:#1b2431;
+  --field-bg:#202a3b;--field-border:#647692;--field-border-hover:#7f92ad;--label-ink:#b7c0cd}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{
@@ -30,11 +33,15 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 .card h1{font-size:19px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
 .card p.sub{margin:0 0 20px;color:var(--mute);font-size:13px}
 .field{margin-bottom:14px}
-.field label{display:block;font-size:12.5px;color:var(--mute);margin-bottom:5px}
+.field label{display:block;font-size:12.5px;color:var(--label-ink);margin-bottom:5px}
 .field input{
-  width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;
-  background:var(--hi);color:var(--ink);font:14px/1.4 var(--sans)
+  width:100%;padding:9px 10px;border:1px solid var(--field-border);border-radius:7px;
+  background:var(--field-bg);color:var(--ink);font:14px/1.4 var(--sans);
+  transition:border-color .12s,box-shadow .12s
 }
+.field input::placeholder{color:var(--mute);opacity:1}
+.field input:hover{border-color:var(--field-border-hover)}
+.field input:focus-visible{outline:2px solid var(--s6);outline-offset:2px;border-color:var(--field-border-hover)}
 .actions{margin-top:20px;display:flex;flex-direction:column;gap:10px}
 .btn{
   padding:9px 14px;border:1px solid var(--line);border-radius:7px;background:var(--hi);
