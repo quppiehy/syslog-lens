@@ -12,6 +12,9 @@ process.env.DB_STORAGE = ':memory:';
 process.env.JWT_SECRET = 'test-jwt-secret-at-least-32-characters-long';
 process.env.JWT_EXPIRES_IN = '8h';
 process.env.COOKIE_SECURE = 'false';
+// Explicitly unset (rather than relying on it being absent) so a developer's
+// local .env INVITE_CODE can never leak into this suite via dotenv.
+process.env.INVITE_CODE = '';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');

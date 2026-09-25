@@ -29,6 +29,10 @@
       <label for="confirmPassword">Confirm password</label>
       <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" required>
     </div>
+    <div class="field">
+      <label for="inviteCode">Invite code</label>
+      <input id="inviteCode" name="inviteCode" type="text" autocomplete="off">
+    </div>
 
     <p id="error" class="msg error" role="alert" aria-live="assertive"></p>
 
@@ -56,6 +60,7 @@
     var employeeNumber = document.getElementById('employeeNumber').value;
     var password = document.getElementById('password').value;
     var confirmPassword = document.getElementById('confirmPassword').value;
+    var inviteCode = document.getElementById('inviteCode').value;
 
     if (!name.trim() || !employeeNumber.trim() || !password || !confirmPassword) {
       setMessage(errorEl, 'All fields are required.', 'error');
@@ -72,7 +77,12 @@
 
     submitBtn.disabled = true;
     try {
-      var result = await postJson('/api/auth/register', { name: name, employeeNumber: employeeNumber, password: password });
+      var result = await postJson('/api/auth/register', {
+        name: name,
+        employeeNumber: employeeNumber,
+        password: password,
+        inviteCode: inviteCode,
+      });
       if (result.ok) {
         window.location.href = '/login?registered=1';
         return;

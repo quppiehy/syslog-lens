@@ -1,10 +1,11 @@
 const sequelize = require('./db');
-const { PORT, JWT_SECRET, validateJwtSecret } = require('./config');
+const { PORT, JWT_SECRET, validateJwtSecret, validateInviteCodeConfig } = require('./config');
 const app = require('./app');
 
 async function start() {
   try {
     validateJwtSecret(JWT_SECRET);
+    validateInviteCodeConfig();
   } catch (err) {
     console.error(`Failed to start server: ${err.message}`);
     process.exit(1);

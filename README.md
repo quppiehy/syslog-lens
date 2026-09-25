@@ -20,7 +20,7 @@ Then open <http://localhost:3000>. You'll be redirected to `/login`; register an
 
 You only need this to run the automated tests, not to use the app.
 
-**Requirements:** [Node.js](https://nodejs.org/) 18 or later.
+**Requirements:** [Node.js](https://nodejs.org/) 24 (the test library jsdom needs 22+; CI and Vercel use 24.x).
 
 **First-time setup** (once per machine, or again after deleting `node_modules`):
 
@@ -67,7 +67,31 @@ npm install
 cp .env.example .env
 ```
 
-`.env` controls `PORT` (default `3000`), `DB_STORAGE` (default `server/data/syslog-lens.sqlite`, created automatically if missing), `JWT_SECRET`, `JWT_EXPIRES_IN` (default `8h`), and `COOKIE_SECURE` (default `false`; set `true` when serving over HTTPS so the auth cookie is marked `Secure`).
+`.env` controls `PORT` (default `3000`), `DB_STORAGE` (default `server/data/syslog-lens.sqlite`, created automatically if missing), `JWT_SECRET`, `JWT_EXPIRES_IN` (default `8h`), and `COOKIE_SECURE` (default `false`; set `true` when serving over HTTPS so the auth cookie is marked `Secure`, which also enables HSTS — see below).
+
+### Environment variables
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PORT` | `3000` | Port Express listens on. |
+| `DB_STORAGE` | `server/data/syslog-lens.sqlite` | SQLite file path (or `:memory:` for tests). Ignored when `DATABASE_URL` is set. |
+| `DATABASE_URL` | *(unset)* | When set, use Postgres (via `pg`) instead of SQLite — e.g. the Neon integration on Vercel sets this automatically. See "Deploying to Vercel" below. |
+| `JWT_SECRET` | *(required)* | Signs auth JWTs; must be ≥32 characters. |
+| `JWT_EXPIRES_IN` | `8h` | JWT/cookie lifetime (`jsonwebtoken` `expiresIn` format). |
+| `COOKIE_SECURE` | `false` | Marks the auth cookie `Secure`; also gates whether HSTS is sent. Set `true` behind HTTPS. |
+| `INVITE_CODE` | *(unset)* | Required in `POST /api/auth/register` body as `inviteCode` whenever set. **Required in production** (`NODE_ENV=production`) — the server refuses to start without one ≥12 characters. Optional in dev/test: leave unset to skip the check entirely. |
+| `TRUST_PROXY` | `false` | Express `trust proxy` setting, used to derive the real client IP (`req.ip`) for rate limiting behind a reverse proxy. Set to `1` on Vercel (a single trusted edge proxy); leave `false` for local development. Accepts `true`/`false`, a hop count, or an Express-style proxy list. |
+| `LOGIN_EMP_MAX_ATTEMPTS` | `5` | Failed logins for one employee number, within `LOGIN_EMP_WINDOW_MS`, before that employee number is locked for `LOGIN_EMP_LOCK_MS`. |
+| `LOGIN_EMP_WINDOW_MS` | `900000` (15 min) | Rolling window for the per-employee counter. |
+| `LOGIN_EMP_LOCK_MS` | `900000` (15 min) | Lockout duration once the per-employee limit is hit. |
+| `LOGIN_IP_MAX_ATTEMPTS` | `20` | Failed logins from one IP, within `LOGIN_IP_WINDOW_MS`, before that IP is locked for `LOGIN_IP_LOCK_MS`. |
+| `LOGIN_IP_WINDOW_MS` | `900000` (15 min) | Rolling window for the per-IP login counter. |
+| `LOGIN_IP_LOCK_MS` | `900000` (15 min) | Lockout duration once the per-IP login limit is hit. |
+| `REGISTER_IP_MAX_ATTEMPTS` | `10` | Registration attempts from one IP, within `REGISTER_IP_WINDOW_MS`, before that IP is locked for `REGISTER_IP_LOCK_MS`. |
+| `REGISTER_IP_WINDOW_MS` | `3600000` (1 hour) | Rolling window for the per-IP register counter. |
+| `REGISTER_IP_LOCK_MS` | `3600000` (1 hour) | Lockout duration once the per-IP register limit is hit. |
+
+All rate-limit counters are stored in the database (a `LoginAttempt` model/table), not in memory — this is required so the limits are enforced correctly across multiple stateless server instances (e.g. Vercel serverless functions), where an in-process counter would be per-instance and trivially bypassable.
 
 `JWT_SECRET` is **required** — the server refuses to start if it's missing or shorter than 32 characters. Generate a strong one with:
 
@@ -97,9 +121,15 @@ npm run db:check
 
 which prints the columns of the `users` table.
 
+### Security headers
+
+Every response carries `helmet`-managed security headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, a `Content-Security-Policy`, and (only when `COOKIE_SECURE=true`) `Strict-Transport-Security`. The CSP's `script-src` allows `'self'` plus a `sha256-` hash per inline `<script>` block found in `syslog-lens.html` and `public/*.html` at startup — no `'unsafe-inline'` for scripts. `style-src` allows `'unsafe-inline'` (the pages use inline `<style>`) plus Google Fonts' stylesheet host; `font-src` allows Google Fonts' font host; `connect-src`/`img-src`/`object-src`/`base-uri`/`form-action`/`frame-ancestors` are locked down to `'self'` (plus `data:`/`blob:` for images, used by report generation).
+
 ### Registration
 
 `POST /api/auth/register` creates a new user. It expects a JSON body with `name`, `employeeNumber` and `password` (all strings). `name` and `employeeNumber` must be non-empty after trimming, `employeeNumber` must be unique, and `password` must be at least 8 characters (checked on the raw, untrimmed value). Passwords are hashed with a salted `scrypt` (Node's built-in `crypto`) before storage — the plaintext is never stored, logged, or returned.
+
+If `INVITE_CODE` is configured (required in production), the body must also include a matching `inviteCode` string; a missing/wrong one returns `403 {"error":"Invalid invite code"}`, checked **before** the duplicate-`employeeNumber` check so it can never be used to probe which employee numbers already exist. In production (`NODE_ENV=production`), a missing/invalid `INVITE_CODE` is fail-closed, not fail-open: the app refuses to start at all (`server/config.js`'s `assertProductionConfig()`, run when `server/app.js` is loaded), and as a second, independent guard the register handler itself also returns `503 {"error":"Registration is not configured"}` rather than silently accepting registrations without an invite code. The comparison uses `crypto.timingSafeEqual` over fixed-length sha256 hashes of both values (not the raw strings), so it can't leak the code's length or content via timing. Registration is also rate-limited per IP (`REGISTER_IP_MAX_ATTEMPTS` per `REGISTER_IP_WINDOW_MS`, default 10/hour); once hit, further attempts return `429 {"error":"Too many attempts. Try again later."}` with a `Retry-After` header until `REGISTER_IP_LOCK_MS` elapses.
 
 ```bash
 curl -X POST http://localhost:3000/api/auth/register \
@@ -137,6 +167,12 @@ should return `200` with `{"token":"<jwt>","user":{"id":1,"name":"Ada Lovelace",
 
 The token is signed HS256, carries `sub` (the user id, as a string), `employeeNumber` and `name` as claims, and expires after `JWT_EXPIRES_IN` (default `8h`).
 
+Login is rate-limited two ways, both DB-backed (never in-memory, so it holds across multiple stateless server instances): per `employeeNumber` (`LOGIN_EMP_MAX_ATTEMPTS` failures within `LOGIN_EMP_WINDOW_MS`, default 5/15min) and per IP (`LOGIN_IP_MAX_ATTEMPTS` within `LOGIN_IP_WINDOW_MS`, default 20/15min) — including an `employeeNumber` that isn't registered at all, so a locked-out unknown employee number also returns `429`, not `401`. Once locked, requests return `429 {"error":"Too many attempts. Try again later."}` with a `Retry-After` header (seconds) until the lock (`LOGIN_EMP_LOCK_MS` / `LOGIN_IP_LOCK_MS`) expires. A successful login resets that employee's failure counter. `req.ip` (used as the rate-limit key) is derived per `TRUST_PROXY` — see the environment variable table above.
+
+**Trade-off:** the per-employee lock is keyed only on `employeeNumber`, which is not a secret — anyone who knows (or guesses) a valid employee number can deliberately lock that account for `LOGIN_EMP_LOCK_MS` (15 minutes by default) just by submitting a few wrong passwords for it, without needing to know anything else about the account. This is accepted as a reasonable trade-off for an invite-only internal tool with a small, known user base, where that risk is low and the alternative (no per-account lock) would make credential-stuffing a single account trivial. The per-IP limiter still bounds how many different employee numbers one source can hammer this way.
+
+**`TRUST_PROXY` matters here:** if the app runs behind any reverse proxy or edge network (e.g. Vercel) and `TRUST_PROXY` is left at its default (`false`), `req.ip` resolves to the proxy's own address for every request, not the real client's — so the per-IP counter (and its rate-limit key) end up shared by *all* clients behind that proxy. In practice this means either everyone gets rate-limited together after a burst of unrelated traffic, or (depending on how the proxy is set up) the per-IP limit stops meaningfully distinguishing clients at all. Set `TRUST_PROXY` to the correct hop count (`1` on Vercel) whenever the app is not receiving connections directly.
+
 On Windows PowerShell, use single quotes around the JSON body and escape the inner double quotes, e.g.:
 
 ```powershell
@@ -171,13 +207,59 @@ Once a log is loaded, the **Generate report** button in the header (next to **Op
 
 Both reports are generated entirely in the browser and downloaded as a single, self-contained `.html` file (inline CSS, no external fonts or scripts, no network requests) — nothing about the log ever leaves the page. Filenames look like `syslog-lens-summary-<source>-<timestamp>.html` and `syslog-lens-incident-<incident>-<timestamp>.html`. Reports use a dark theme on screen and switch to a light, ink-saving theme (severity colours and labels preserved) when printed.
 
+## Deploying to Vercel
+
+The app deploys to [Vercel](https://vercel.com) as a single zero-config Express [Vercel Function](https://vercel.com/docs/frameworks/backend/express), backed by [Neon](https://neon.tech) Postgres instead of SQLite.
+
+### How the deployment is wired up
+
+- **Entry point:** `index.js` at the project root re-exports the Express app from `server/app.js` — one of the [conventional locations](https://vercel.com/docs/frameworks/backend/express#exporting-the-express-application) Vercel's zero-config Express support looks for. `server/index.js` (used by `npm start`) is unaffected and still does its own `app.listen()`.
+- **Database:** if `DATABASE_URL` is set, `server/db.js` uses Sequelize's `postgres` dialect (via `pg`/`pg-hstore`) with SSL required and a small pool (`max: 2`) sized for a serverless function rather than a long-running process. Unset, it falls back to SQLite exactly as before. `sqlite3` is only ever `require()`'d on the SQLite path, and is listed as an `optionalDependency` — its native build can't fail Vercel's `npm install`, and the Postgres path never has to load it.
+- **Schema:** there's no separate migration step. `sequelize.sync()` (no `force`/`alter`) runs the same way it always has, but on Vercel there is no startup hook to run it before the first request, and a function instance can be reused across many requests — so `server/middleware/ensureDbSynced.js` runs it lazily, caching the in-flight promise so it happens at most once per instance. If it fails, that request gets a `503` and the *next* request retries (the failure isn't cached).
+- **Why `syslog-lens.html` can't be a static file:** Vercel's docs state that files in the project's Output Directory (default `public`, or `.`) are served directly from its CDN, and that "precedence is given to the filesystem prior to rewrites being applied" ([vercel.json reference](https://vercel.com/docs/project-configuration/vercel-json#outputdirectory)) — a matching static file is served *before* any rewrite or function runs, meaning before `requirePage`'s auth check ever executes. The Express docs separately confirm that a zero-config Express deployment serves anything under `public/**` the same CDN-first way ([Express on Vercel — Serving static assets](https://vercel.com/docs/frameworks/backend/express#serving-static-assets)). Since this repo's own `public/` holds the login/register pages — which still need helmet's CSP/HSTS from Express, not the CDN's default headers — `vercel.json` sets `outputDirectory` to `.vercel-empty-output/`, a directory that is checked into the repo and guaranteed to contain no files. With nothing there to match, every request (`/`, `/syslog-lens.html`, `/login`, `/register`, `/auth.css`, `/api/*`, everything) always falls through to the Express function, which is the only place auth and security headers are enforced. `test/vercel-config.test.js` asserts this directory stays empty and that `outputDirectory` isn't `public` or `.`.
+- **`includeFiles`:** `syslog-lens.html` and `public/**` are read via `fs`/`express.static()`/`res.sendFile()` at runtime, not via a static `require()` — Vercel's dependency tracer can't see those, so `vercel.json`'s `functions["index.js"].includeFiles` force-includes them in the deployed function bundle.
+
+### Checklist
+
+1. **Link the repo.** [Import the project](https://vercel.com/new) into Vercel from GitHub (or run `vercel link`).
+2. **Add Postgres.** From the project's Vercel dashboard, add the [Neon integration](https://vercel.com/marketplace/neon) (or any Postgres add-on) — this sets `DATABASE_URL` for you automatically. You don't need to type it in.
+3. **Set the remaining environment variables** (Project Settings → Environment Variables, for both Production and Preview):
+
+   | Variable | Value | How to generate |
+   |---|---|---|
+   | `DATABASE_URL` | *(set automatically by the Neon integration)* | — |
+   | `JWT_SECRET` | a random string, ≥32 characters | `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+   | `INVITE_CODE` | a random string, ≥12 characters | `node -e "console.log(require('crypto').randomBytes(9).toString('base64url'))"` |
+   | `COOKIE_SECURE` | `true` | Vercel always serves over HTTPS, so this should always be `true` in Production/Preview — never leave it at the local-dev default of `false`. |
+   | `TRUST_PROXY` | `1` | Vercel places exactly one proxy (its edge network) in front of your function. `1` means "trust exactly one hop", which makes `req.ip` the address that edge actually observed — not whatever a client puts in its own `X-Forwarded-For` header (see `test/trust-proxy.test.js`), and not the edge's own address for every request (the failure mode if this is left at its `false` default). |
+
+   The login/register rate-limit variables (`LOGIN_EMP_MAX_ATTEMPTS`, etc.) are optional — the defaults documented above apply if you don't set them.
+4. **Redeploy** (Vercel redeploys automatically on the next push once these are set; trigger one manually from the dashboard if needed).
+5. **Run the smoke check** against the deployed URL:
+
+   ```bash
+   npm run smoke -- https://<your-project>.vercel.app
+   ```
+
+   This confirms, from the outside, that logged-out visitors get redirected instead of served the app, that nothing outside `public/` is reachable, and that the login/register pages carry the real security headers (not the CDN's defaults).
+6. **Turn on branch protection.** In the GitHub repo's Settings → Branches, add a protection rule for `main` requiring the `CI / test` check (from `.github/workflows/ci.yml`) to pass before merging.
+
+### CI/CD
+
+- `.github/workflows/ci.yml` runs the full test suite (`npm test`) on every pull request and push to `main`, on Ubuntu with the Node version pinned in `package.json`'s `engines` field, with Playwright's Chromium browser cached between runs.
+- Actual deployments are handled by Vercel's own Git integration: every pull request gets a Preview Deployment, and pushes to `main` deploy to Production — no separate deploy workflow is needed. To smoke-test a PR's preview deployment, run `npm run smoke -- <preview-url>` manually (its URL is posted by the Vercel bot on the PR) until that's wired into CI.
+
 ## Project files
 
 | Path | Purpose |
 |---|---|
 | `syslog-lens.html` | The whole app: HTML, CSS and JS in one file. Served by the backend at `/` and `/syslog-lens.html`, protected by login. |
 | `public/` | Public login/register pages and their shared assets (`login.html`, `register.html`, `auth.css`, `auth.js`) |
+| `index.js` | Vercel entry point — re-exports the Express app from `server/app.js` (see "Deploying to Vercel" above). Not used for local dev; that's `server/index.js`. |
+| `vercel.json` | Vercel deployment config: keeps static serving out of the CDN's way and bundles `syslog-lens.html`/`public/**` into the function. |
+| `scripts/smoke.js` | Dependency-free smoke check for a deployed (or local) instance — `npm run smoke -- <url>`. |
 | `test/` | Automated tests |
 | `test-data/` | Synthetic sample log and the incident groupings it should produce |
-| `server/` | Backend (Express + Sequelize/SQLite): auth, page guards, and static serving |
+| `server/` | Backend (Express + Sequelize/SQLite or Postgres): auth, page guards, DB sync, and static serving |
+| `.github/workflows/ci.yml` | CI: runs the test suite on every PR and push to `main` |
 | `HANDOFF.md` | Design decisions, known limitations and next steps |

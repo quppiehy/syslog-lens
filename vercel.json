@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": ".vercel-empty-output",
+  "functions": {
+    "index.js": {
+      "includeFiles": "{syslog-lens.html,public/**}"
+    }
+  }
+}
