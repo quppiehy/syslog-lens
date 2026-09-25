@@ -1,0 +1,24 @@
+# SYNTHETIC FORTINET FORTIGATE SYSLOG TEST DATA (key=value format) - NOT REAL PRODUCTION LOGS
+# FOR SYSLOG LENS TESTING ONLY. Fake device IDs; RFC 5737/1918 addresses only.
+# Format: <PRI>date=YYYY-MM-DD time=HH:MM:SS[ tz="+HHMM"] devname="..." devid="..." logid="..." type="..." subtype="..." level="..." ... msg="..."
+# date=/time= are the FortiGate's own DEVICE-LOCAL time, not UTC. Timestamp preference order
+# (see fortiTime() in syslog-lens.html): (a) eventtime= epoch, unit by digit count (10=s,
+# 13=ms, 16=us, 19=ns); (b) date=+time= combined with tz=; (c) date=+time= with no tz=, read as
+# the viewer's own local time. The lines below deliberately exercise all three paths, including
+# two tz= spellings ("+0800" and "+08:00") and a negative offset ("-0500"), plus a same-instant
+# pair (one via eventtime=, one via date=+time=+tz=) to prove the two paths agree.
+<186>date=2026-09-25 time=15:00:10 devname="fgt1" devid="FGT60F1234567890" logid="0100032001" type="event" subtype="system" level="critical" vd="root" eventtime=1790319600 msg="System entered into conserve mode due to low memory"
+<187>date=2026-09-25 time=15:00:30 tz="+0800" devname="fgt1" devid="FGT60F1234567890" logid="0100032002" type="event" subtype="system" level="error" vd="root" msg="Admin admin logged in successfully from 10.30.0.6"
+<189>date=2026-09-25 time=15:01:00 devname="fgt1" devid="FGT60F1234567890" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.10.10.5 srcport=51322 dstip=203.0.113.10 dstport=443 srcintf="port1" dstintf="wan1" action="close" policyid=4 proto=6 service="HTTPS" duration=32 sentbyte=4321 rcvdbyte=8765 eventtime=1790319660
+<189>date=2026-09-25 time=15:01:30 devname="fgt1" devid="FGT60F1234567890" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.10.10.6 srcport=51900 dstip=203.0.113.11 dstport=80 srcintf="port1" dstintf="wan1" action="deny" policyid=2 proto=6 service="HTTP" eventtime=1790319690
+<188>date=2026-09-25 time=15:02:00 devname="fgt1" devid="FGT60F1234567890" logid="0100020001" type="event" subtype="system" level="warning" vd="root" msg="CPU usage high: 92 percent"
+<185>date=2026-09-25 time=15:02:30 devname="fgt1" devid="FGT60F1234567890" logid="0211008192" type="utm" subtype="ips" eventtype="signature" level="alert" vd="root" severity="high" srcip=203.0.113.55 dstip=10.1.1.20 attack="MS.SQL.Server.Resolution.Service.Buffer.Overflow" action="blocked" msg="applications3: MS.SQL.Server.Resolution.Service.Buffer.Overflow" eventtime=1790319750
+<189>date=2026-09-25 time=15:03:00 devname="fgt1" devid="FGT60F1234567890" logid="0211008193" type="utm" subtype="webfilter" eventtype="ftgd_allow" level="notice" vd="root" srcip=10.10.10.7 hostname="example.invalid" catdesc="Information Technology" action="passthrough" msg="URL belongs to an allowed category in policy" eventtime=1790319780
+<190>date=2026-09-25 time=15:03:30 devname="fgt1" devid="FGT60F1234567890" logid="0100020002" type="event" subtype="system" level="information" vd="root" eventtime=1790319810000 msg="Scheduled configuration backup completed"
+<187>date=2026-09-25 time=15:05:00 devname="fgt1" devid="FGT60F1234567890" logid="0101037127" type="event" subtype="vpn" level="error" vd="root" action="tunnel-down" remip=198.51.100.20 tunnelip=10.255.1.1 tunneltype="ipsec" tunnelid=12345 reason="peer restart" msg="IPsec tunnel down" eventtime=1790319900
+<189>date=2026-09-25 time=15:05:30 devname="fgt1" devid="FGT60F1234567890" logid="0101037128" type="event" subtype="vpn" level="notice" vd="root" action="tunnel-up" remip=198.51.100.20 tunnelip=10.255.1.1 tunneltype="ipsec" tunnelid=12345 msg="IPsec tunnel up" eventtime=1790319930
+<184>date=2026-09-25 time=02:06:40 tz="-0500" devname="fgt1" devid="FGT60F1234567890" logid="0100037006" type="event" subtype="system" level="emergency" vd="root" msg="Power supply 2 failure detected"
+<191>date=2026-09-25 time=15:07:30 tz="+08:00" devname="fgt1" devid="FGT60F1234567890" logid="0719000001" type="event" subtype="system" level="debug" vd="root" msg="Heartbeat check completed"
+<186>eventtime=1790320100000000000 devname="fgt1" devid="FGT60F1234567890" logid="0100032003" type="event" subtype="system" level="critical" vd="root" msg="HA member fgt2 heartbeat lost"
+<189>eventtime=1790320200000000 devname="fgt1" devid="FGT60F1234567890" logid="0100032004" type="event" subtype="system" level="notice" vd="root" msg="Config sync check via eventtime"
+<189>date=2026-09-25 time=15:10:00 tz="+0800" devname="fgt1" devid="FGT60F1234567890" logid="0100032005" type="event" subtype="system" level="notice" vd="root" msg="Config sync check via date and time"

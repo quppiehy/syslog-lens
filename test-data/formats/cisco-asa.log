@@ -1,0 +1,14 @@
+# SYNTHETIC CISCO ASA SYSLOG TEST DATA - NOT REAL PRODUCTION LOGS
+# FOR SYSLOG LENS TESTING ONLY. Fake hostnames; RFC 5737/1918 addresses only.
+# ASA format: %ASA-SEV-msgnum, seen with and without a leading <PRI>/hostname; the timestamp
+# includes a year, as written by many ASA syslog collectors.
+<188>10001: edge-fw02: Sep 25 2026 12:00:01.010: %ASA-4-106023: Deny tcp src outside:203.0.113.40/51022 dst inside:10.1.2.40/443 by access-group "OUTSIDE_IN" [0x0, 0x0]
+<188>10002: edge-fw02: Sep 25 2026 12:00:02.400: %ASA-4-106023: Deny tcp src outside:203.0.113.40/51023 dst inside:10.1.2.40/443 by access-group "OUTSIDE_IN" [0x0, 0x0]
+Sep 25 2026 12:00:05.500: %ASA-6-302013: Built inbound TCP connection 5521 for outside:203.0.113.41/443 (203.0.113.41/443) to inside:10.1.2.41/443 (10.1.2.41/443)
+Sep 25 2026 12:00:35.900: %ASA-6-302014: Teardown TCP connection 5521 for outside:203.0.113.41/443 to inside:10.1.2.41/443 duration 0:00:30 bytes 4210
+Sep 25 2026 12:01:00.200: edge-fw02 %ASA-4-106023: Deny tcp src outside:203.0.113.42/51100 dst inside:10.1.2.42/22 by access-group "OUTSIDE_IN" [0x0, 0x0]
+Sep 25 2026 12:01:01.450: edge-fw02 %ASA-4-106023: Deny tcp src outside:203.0.113.42/51101 dst inside:10.1.2.42/22 by access-group "OUTSIDE_IN" [0x0, 0x0]
+<185>10101: edge-fw02: Sep 25 2026 12:05:00.070: %ASA-1-104001: (Primary) Switching to ACTIVE - No Error
+<190>10102: edge-fw02: Sep 25 2026 12:05:01.900: %ASA-6-105043: Failover LAN interface up
+<188>10201: edge-fw02: Sep 25 2026 12:10:00.100: %ASA-4-113019: Group = VPN-USERS, Username = jdoe, IP = 198.51.100.66, Session disconnected. Session Type: IKEv2, Duration: 0h:12m:03s
+<190>10202: edge-fw02: Sep 25 2026 12:10:05.300: %ASA-6-113039: Group = VPN-USERS, Username = jdoe, IP = 198.51.100.66, Session Type IKEv2 established

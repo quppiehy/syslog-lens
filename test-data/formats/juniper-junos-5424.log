@@ -1,0 +1,15 @@
+# SYNTHETIC JUNIPER JUNOS SYSLOG TEST DATA (RFC 5424 structured-data form) - NOT REAL PRODUCTION LOGS
+# FOR SYSLOG LENS TESTING ONLY. Fake hostnames; RFC 5737/1918 addresses only.
+# Format: <PRI>1 timestamp host process pid TAG [junos@2636.1.1.1.2.xx ...] message
+<187>1 2026-09-25T14:00:10.370Z mx4 rpd 1234 BGP_IO_ERROR_CLOSE_SESSION [junos@2636.1.1.1.2.xx reason="no route to host"] bgp peer 198.51.100.60 (External AS 64530 IFL ge-0/0/3.0) io error 'no route to host'
+<189>1 2026-09-25T14:00:40.900Z mx4 rpd 1234 RPD_BGP_NEIGHBOR_STATE_CHANGED [junos@2636.1.1.1.2.xx old-state="Established" new-state="Idle"] BGP peer 198.51.100.60 (External AS 64530) changed state from Established to Idle (event Stop)
+<189>1 2026-09-25T14:02:00.150Z mx4 rpd 1234 RPD_BGP_NEIGHBOR_STATE_CHANGED [junos@2636.1.1.1.2.xx old-state="Idle" new-state="Established"] BGP peer 198.51.100.60 (External AS 64530) changed state from Idle to Established (event RecvKeepAlive)
+<188>1 2026-09-25T14:05:00.000Z mx5 rpd 1400 OSPF_NBRDOWN [junos@2636.1.1.1.2.xx nbr="192.0.2.40"] OSPF neighbor 192.0.2.40 (realm ospf-v2 ge-0/0/4.0 area 0.0.0.0) state changed from Full to Down due to KillNbr
+<189>1 2026-09-25T14:05:30.400Z mx5 rpd 1400 OSPF_NBRUP [junos@2636.1.1.1.2.xx nbr="192.0.2.40"] OSPF neighbor 192.0.2.40 (realm ospf-v2 ge-0/0/4.0 area 0.0.0.0) state changed from Down to Full due to 2WayReceived
+<187>1 2026-09-25T14:10:00.000Z mx5 mib2d 1500 SNMP_TRAP_LINK_DOWN [junos@2636.1.1.1.2.xx ifName="ge-0/0/5"] ifIndex 600, ifAdminStatus up(1), ifOperStatus down(2), ifName ge-0/0/5
+<190>1 2026-09-25T14:10:15.200Z mx5 mib2d 1500 SNMP_TRAP_LINK_UP [junos@2636.1.1.1.2.xx ifName="ge-0/0/5"] ifIndex 600, ifAdminStatus up(1), ifOperStatus up(1), ifName ge-0/0/5
+<188>1 2026-09-25T14:15:00.500Z srx2 sshd 2200 SSHD_LOGIN_FAILED [junos@2636.1.1.1.2.xx user="admin"] Failed password for admin from 203.0.113.95 port 50011 ssh2
+<188>1 2026-09-25T14:15:04.700Z srx2 sshd 2200 SSHD_LOGIN_FAILED [junos@2636.1.1.1.2.xx user="admin"] Failed password for admin from 203.0.113.95 port 50012 ssh2
+<188>1 2026-09-25T14:15:08.900Z srx2 sshd 2200 SSHD_LOGIN_FAILED [junos@2636.1.1.1.2.xx user="admin"] Failed password for admin from 203.0.113.95 port 50013 ssh2
+<191>1 2026-09-25T14:20:00.000Z mx6 chassisd 1600 CHASSISD_SNMP_TRAP7 [junos@2636.1.1.1.2.xx] SNMP trap generated: jnxFruOK
+<184>1 2026-09-25T14:25:00.000Z mx6 alarmd 1700 ALARMD_CHASSIS_ALARM_SET [junos@2636.1.1.1.2.xx] Alarm set: FPC color=RED, class=CHASSIS reason=Fan failure

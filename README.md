@@ -2,6 +2,15 @@
 
 A browser-based tool for troubleshooting network syslogs. Upload or paste a log to browse events by severity and inspect incidents with a summary and timeline. All parsing happens in your browser, and nothing is uploaded.
 
+## Supported log formats
+
+- RFC 5424 and RFC 3164 syslog, with or without a `<PRI>` prefix
+- Cisco IOS, IOS-XE and NX-OS (`%FACILITY-SEV-MNEMONIC`), and Cisco ASA (`%ASA-SEV-msgnum`)
+- Juniper Junos, both RFC 3164/BSD style and RFC 5424 structured-data
+- FortiGate `key=value` syslog
+
+Lines starting with `#` are treated as comments and skipped. See `HANDOFF.md`'s "Format test library" for fixtures, exact variants and known limitations.
+
 ## Using the app
 
 The app is served by the included backend and requires signing in.

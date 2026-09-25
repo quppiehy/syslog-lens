@@ -212,11 +212,13 @@ let D=null,sel=null,cur=null,name='pasted log',currentUser=null;const SEC={sum:t
 function guess(m){return /emerg|panic/i.test(m)?0:/\balert/i.test(m)?1:/crit/i.test(m)?2:/err|fail|denied|\bdown\b/i.test(m)?3:/warn/i.test(m)?4:/notice/i.test(m)?5:/debug/i.test(m)?7:6}
 const WIN=300e3,IFR=/\b(?:[A-Za-z]+Ethernet|Ethernet|Vlan|Loopback|Tunnel|Serial|Port-channel|Po|Gi|Te|Fa|Eth)[\d\/.:]+/g,IPR=/\b\d{1,3}(?:\.\d{1,3}){3}\b/g;
 /* Lowercase/Juniper/Linux interface names (eth0, ens3, bond0, ge-0/0/0, xe-1/2/0.100, ae0,
-   lowercase gi0/1, ...). Gated by a lookbehind requiring "interface " or "port " immediately
-   before the name, unlike IFR above which matches its (capitalised, canonical) names anywhere.
-   That context requirement is what keeps casual lowercase text such as dhcp01's "via vlan20"
-   in network-incidents.log from being read as an interface (see HANDOFF.md). */
-const IFR2=/(?<=\b(?:[Ii]nterface|port)[ :]\s*)(?:eth|ens|eno|enp|bond|ge|xe|ae|gi|te|fa|po|fxp|em)-?\d+(?:\/\d+){0,3}(?:\.\d+)?\b/g;
+   lowercase gi0/1, ...). Gated by a lookbehind requiring "interface ", "port " or "ifName "
+   immediately before the name, unlike IFR above which matches its (capitalised, canonical)
+   names anywhere. That context requirement is what keeps casual lowercase text such as
+   dhcp01's "via vlan20" in network-incidents.log from being read as an interface (see
+   HANDOFF.md). "ifName" is Junos's own SNMP-trap lead-in (SNMP_TRAP_LINK_DOWN/UP's "ifName
+   ge-0/0/1"), so a link-down/link-up pair on the same interface groups into one incident. */
+const IFR2=/(?<=\b(?:[Ii]nterface|port|ifName)[ :]\s*)(?:eth|ens|eno|enp|bond|ge|xe|ae|gi|te|fa|po|fxp|em)-?\d+(?:\/\d+){0,3}(?:\.\d+)?\b/g;
 /* IPv6 addresses, full or "::"-compressed. Full form requires exactly 8 hex groups (7 colons),
    which a MAC address (6 groups) or a HH:MM:SS timestamp (3 groups) never has; the compressed
    form requires a literal "::", which neither a MAC address nor a timestamp ever contains
@@ -225,27 +227,102 @@ const IP6R=/\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b|\b(?:[0-9a-fA-F]{1,4}:)
 /* Cisco IOS message format, e.g. "000123: *Mar  1 00:00:01.123: %LINK-3-UPDOWN: Interface
    GigabitEthernet0/1, changed state to down" or (with a <PRI> and a hostname added by some
    devices) "<189>45: core-rtr1: Sep 24 03:14:02.114 UTC: %OSPF-5-ADJCHG: ...". Groups: seq
-   number, hostname, "*"/"." freshness marker, month, day, time, fractional seconds, timezone
-   abbreviation, facility, severity (0-7, same scale as syslog), mnemonic, message. */
-const CSC=/^(?:(\d+): )?(?:(\S+): )?([*.])?([A-Z][a-z]{2})\s+(\d{1,2}) (\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?(?: ([A-Za-z]{2,5}))?: %([A-Za-z0-9_]+)-([0-7])-(\S+?): ?(.*)$/;
+   number, hostname, "*"/"." freshness marker, month, day, an optional 4-digit year (IOS-XE/ASA
+   collectors that write "Mon Day YYYY HH:MM:SS", the year defaults to the current year when
+   absent, same as plain IOS), time, fractional seconds, timezone abbreviation, facility,
+   severity (0-7, same scale as syslog), mnemonic, message. */
+const CSC=/^(?:(\d+): )?(?:(\S+): )?([*.])?([A-Z][a-z]{2})\s+(\d{1,2})\s+(?:(\d{4}) )?(\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?(?: ([A-Za-z]{2,5}))?: %([A-Za-z0-9_]+)-([0-7])-(\S+?): ?(.*)$/;
 /* Second Cisco IOS variant, as written by many syslog collectors: the hostname comes AFTER the
    timestamp instead of before it, with no colon separating the timestamp from the hostname, e.g.
    "Sep 25 14:00:10.370: core-rtr1 %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to
-   down". Groups: month, day, time, fractional seconds, hostname, facility, severity, mnemonic,
-   message. The hostname is a single token (no spaces) that must not itself start with "%", so a
-   hostless line like "...: %OSPF-5-ADJCHG: ..." is correctly left for CSC above to handle. Tried
-   before CSC only for clarity - CSC's own colon-then-"%" requirement already fails on this
-   format's "<time>: <host> %..." shape (a hostname where "%FACILITY" is expected), so ordering
-   between the two doesn't change results, but must stay before the RFC 3164 fallback below,
-   which has no fractional-seconds support and would otherwise misparse or reject these lines. */
-const CSC2=/^([A-Z][a-z]{2})\s+(\d{1,2}) (\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?:? ((?!%)\S+) %([A-Za-z0-9_]+)-([0-7])-(\S+?): ?(.*)$/;
+   down" (or, with an IOS-XE/ASA-style year, "Sep 25 2026 14:00:10.370: edge-fw02 %ASA-4-106023:
+   ..."). Groups: month, day, optional year, time, fractional seconds, hostname, facility,
+   severity, mnemonic, message. The hostname is a single token (no spaces) that must not itself
+   start with "%", so a hostless line like "...: %OSPF-5-ADJCHG: ..." is correctly left for CSC
+   above to handle. Tried before CSC only for clarity - CSC's own colon-then-"%" requirement
+   already fails on this format's "<time>: <host> %..." shape (a hostname where "%FACILITY" is
+   expected), so ordering between the two doesn't change results, but must stay before the RFC
+   3164 fallback below, which has no fractional-seconds support and would otherwise misparse or
+   reject these lines. No timezone-abbreviation support in this variant (see HANDOFF.md). */
+const CSC2=/^([A-Z][a-z]{2})\s+(\d{1,2})\s+(?:(\d{4}) )?(\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?:? ((?!%)\S+) %([A-Za-z0-9_]+)-([0-7])-(\S+?): ?(.*)$/;
+/* Cisco NX-OS message format: the year LEADS the timestamp instead of trailing it, and a
+   hostname is always present (NX-OS never omits it), e.g. "<189>2026 Sep 25 11:00:01 core-sw7
+   %ETHPORT-5-IF_DOWN_LINK_FAILURE: Interface Ethernet1/1 is down (Link failure)". Groups: year,
+   month, day, time, fractional seconds, hostname, facility, severity, mnemonic, message. */
+const NXR=/^(\d{4}) ([A-Z][a-z]{2})\s+(\d{1,2}) (\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))? (\S+) %([A-Za-z0-9_]+)-([0-7])-(\S+?): ?(.*)$/;
+/* FortiGate key=value syslog: every field is "key=value" or "key="quoted value"", e.g.
+   "<189>date=2026-09-25 time=14:00:10 devname="fgt1" ... type="event" subtype="system"
+   level="warning" ... msg="...". Detected by the key=value payload STARTING the line (after
+   the optional <PRI> and any leading whitespace) with one of date=/logver=/timestamp=/
+   eventtime=, AND the line containing devname= somewhere - see the detection check in parse()
+   below. Requiring the lead-in keeps a line from another format that merely *mentions*
+   "devname=... date=... time=..." inside its message (e.g. an RFC 5424 line quoting FortiGate
+   config) from being misdetected as FortiGate. Severity comes from level= (mapped
+   emergency..debug -> 0..7 by FORTI_LVL below), never guessed from keywords. Host comes from
+   devname=. The timestamp is picked in this order (see fortiTime() below): (a) eventtime= (a
+   Unix epoch), its unit detected by digit count - 10 digits = seconds, 13 = milliseconds, 16 =
+   microseconds, 19 = nanoseconds; any other digit count is ignored and falls through; (b)
+   date=+time= combined with tz= (an explicit offset such as "+0800", "-0500" or "+08:00") -
+   date=/time= are the DEVICE's LOCAL time, not UTC, so a tz= is needed to place them on the UTC
+   timeline; (c) date=+time= with no tz=, read as the *viewer's* local time, consistent with how
+   RFC 3164/Cisco lines with no timezone of their own are treated elsewhere in this file. The
+   message is msg= or logdesc= if present, plus a few key fields (src/dst/remote IP, action)
+   appended in parentheses so grouping keys (IPR in keys() below) still pick up the addresses -
+   this is also how the VPN tunnel-down/tunnel-up pair in
+   test-data/formats/fortinet-fortigate.log link into one incident, via their shared remip=. */
+const FORTI_LVL={emergency:0,alert:1,critical:2,error:3,warning:4,notice:5,information:6,informational:6,debug:7};
+function parseKV(s){const kv={};s.replace(/(\w+)=(?:"([^"]*)"|(\S+))/g,(_,k,v1,v2)=>{kv[k]=v1!==undefined?v1:v2;return''});return kv}
+/* tz= as e.g. "+0800", "-0500" or "+08:00" -> signed offset in minutes (east of UTC positive),
+   or null if kv.tz is absent/unrecognised. */
+function fortiTzOffsetMin(kv){
+ if(!kv.tz)return null;
+ const m=String(kv.tz).match(/^([+-])(\d{2}):?(\d{2})$/);
+ if(!m)return null;
+ return(m[1]==='-'?-1:1)*(Number(m[2])*60+Number(m[3]));
+}
+function fortiTime(kv){
+ if(kv.eventtime){
+  const raw=String(kv.eventtime),n=Number(raw);
+  if(raw&&!isNaN(n)){
+   if(raw.length===10)return new Date(n*1000);
+   if(raw.length===13)return new Date(n);
+   if(raw.length===16)return new Date(Math.floor(n/1e3));
+   if(raw.length===19)return new Date(Math.floor(n/1e6));
+   // any other digit count: not a recognised eventtime unit - ignore and fall through.
+  }
+ }
+ if(kv.date&&kv.time){
+  const dp=kv.date.split('-').map(Number),tp=kv.time.split(':').map(Number);
+  if(dp.length===3&&tp.length===3&&!dp.some(isNaN)&&!tp.some(isNaN)){
+   const[y,mo,d]=dp,[hh,mi,se]=tp,offMin=fortiTzOffsetMin(kv);
+   if(offMin!=null)return new Date(Date.UTC(y,mo-1,d,hh,mi,se)-offMin*60000);
+   return new Date(y,mo-1,d,hh,mi,se); // no tz=: read as the viewer's own local time.
+  }
+ }
+ return null;
+}
+function fortiMsg(kv){
+ const base=kv.msg||kv.logdesc||[kv.type,kv.subtype].filter(Boolean).join('/')||'FortiGate event',extras=[];
+ if(kv.srcip)extras.push('src '+kv.srcip+(kv.srcport?':'+kv.srcport:''));
+ if(kv.dstip)extras.push('dst '+kv.dstip+(kv.dstport?':'+kv.dstport:''));
+ if(kv.remip)extras.push('remote '+kv.remip+(kv.tunnelip?' (tunnel '+kv.tunnelip+')':''));
+ if(kv.action)extras.push('action='+kv.action);
+ return extras.length?base+' ('+extras.join(', ')+')':base;
+}
 /* Event keys: interface names, IP addresses, and (only when the event matches one of the
    specific INCIDENT_RULES below, see ruleOf()) a rule key. Events on the same device that
    share a key and are at most WIN ms apart belong to one incident (chained, so later events
    can bridge groups). A shared process name alone is deliberately not a key: two events just
    happen to come from the same daemon (e.g. a firewall's periodic summaries) far too often to
    mean they're related. */
-function keys(e){const k=[],ri=ruleOf(e);if(ri>=0)k.push('a:'+ri);(e.msg.match(IFR)||[]).forEach(x=>k.push('i:'+x.replace(/[.:]+$/,'')));(e.msg.match(IFR2)||[]).forEach(x=>k.push('i:'+x));(e.msg.match(IPR)||[]).forEach(x=>{if(x!=='0.0.0.0')k.push('p:'+x)});(e.msg.match(IP6R)||[]).forEach(x=>{if(x!=='::')k.push('p:'+x)});return k}
+/* Normalises an interface name for GROUPING KEYS ONLY (never for displayed text): maps the
+   common Cisco abbreviated prefixes to their canonical long form, case-insensitively, so e.g.
+   "Gi1/0/24" and "GigabitEthernet1/0/24" on the same device share a key. Juniper (ge-/xe-/et-)
+   and other Linux-style names (eth0, bond0, ...) aren't in NORM_PREFIX, so they pass through
+   unchanged, exactly as before. */
+const NORM_PREFIX={gi:'GigabitEthernet',gig:'GigabitEthernet',te:'TenGigabitEthernet',fa:'FastEthernet',po:'Port-channel',eth:'Ethernet'};
+function normIface(name){const m=name.match(/^([A-Za-z-]+)(.*)$/s);if(!m)return name;const canon=NORM_PREFIX[m[1].toLowerCase()];return canon?canon+m[2]:name}
+function keys(e){const k=[],ri=ruleOf(e);if(ri>=0)k.push('a:'+ri);(e.msg.match(IFR)||[]).forEach(x=>k.push('i:'+normIface(x.replace(/[.:]+$/,''))));(e.msg.match(IFR2)||[]).forEach(x=>k.push('i:'+normIface(x)));(e.msg.match(IPR)||[]).forEach(x=>{if(x!=='0.0.0.0')k.push('p:'+x)});(e.msg.match(IP6R)||[]).forEach(x=>{if(x!=='::')k.push('p:'+x)});return k}
 const SL=['Emergency','Alert','Critical','Error','Warning','Notice','Informational','Debug'],PL=['Emergencies','Alerts','Critical','Errors','Warnings','Notices','Informational','Debug'];
 const pl=(n,w)=>n+' '+w+(n===1?'':'s'),N=(es,re)=>es.filter(e=>re.test(e.msg)).length,lst=a=>a.length>2?a.slice(0,-1).join(', ')+', and '+a.at(-1):a.join(' and ');
 const topk=(es,p)=>{const c=new Map();es.forEach(e=>keys(e).forEach(k=>{if(k[0]===p)c.set(k,(c.get(k)||0)+1)}));return[...c].sort((a,b)=>b[1]-a[1]).map(x=>x[0].slice(2))};
@@ -259,7 +336,11 @@ const bd=(i,hl)=>i.sevs.map(v=>{const n=i.ev.filter(e=>e.sev===v).length,t=n+' '
    matching the same rule isn't a meaningful link for grouping. */
 const INCIDENT_RULES=[
  {name:'bgp',
-  match:es=>es.some(e=>/bgp/i.test(e.proc))||N(es,/neighbor \S+ (Up|Down)/)||N(es,/withdrawn|installed via/),
+  // The proc check catches Cisco's "bgpd"/"BGP" facility names; the message check catches
+  // Junos, where BGP events come from a generic daemon (rpd) but the message text itself
+  // clearly says "bgp" (e.g. "bgp peer 198.51.100.2 ... declared down", "BGP peer ... changed
+  // state"), per HANDOFF.md's note on mapping Junos facilities into these rules by message text.
+  match:es=>es.some(e=>/bgp/i.test(e.proc))||es.some(e=>/\bbgp\b/i.test(e.msg))||N(es,/neighbor \S+ (Up|Down)/)||N(es,/withdrawn|installed via/),
   build:(es,apps,host,n,d,B)=>{
    const peer=topk(es,'p')[0]||'',dn=N(es,/neighbor \S+ Down/),up=N(es,/neighbor \S+ Up\b/),fl=N(es,/attempt .* failed/),loss=N(es,/withdrawn/),rest=N(es,/installed via/),p=[];
    N(es,/keepalive delayed/)&&p.push('delayed keepalives');
@@ -272,7 +353,9 @@ const INCIDENT_RULES=[
    return{kind,subj,txt:`${B(host)} logged ${n} related events involving ${peer?'peer '+B(peer):'a BGP neighbour'} over ${d}. The sequence includes ${lst(p)}.`};
   }},
  {name:'ospf',
-  match:es=>es.some(e=>/ospf/i.test(e.proc))||N(es,/Nbr \S+ on/),
+  // Same reasoning as the bgp rule above: Junos OSPF events also come from rpd, but the
+  // message text says "OSPF neighbor ...".
+  match:es=>es.some(e=>/ospf/i.test(e.proc))||es.some(e=>/\bospf\b/i.test(e.msg))||N(es,/Nbr \S+ on/),
   build:(es,apps,host,n,d,B)=>{
    const ifc=topk(es,'i')[0]||'',nb=topk(es,'p')[0]||'',dn=N(es,/from FULL to DOWN/),fu=N(es,/to FULL/),ld=N(es,/changed state to down/),dt=N(es,/Dead timer expired/),sp=N(es,/SPF calculation/),p=[];
    ld&&p.push(pl(ld,'link-down event'));
@@ -314,22 +397,39 @@ function parse(text){
  const ev=[],bad=[];
  text.split(/\r?\n/).forEach(raw=>{
   if(!raw.trim())return;
-  let s=raw,pri=null,m,t,host,proc,msg,cscSev=null;
+  if(/^\s*#/.test(raw))return; // comment line: skipped entirely, not counted as unparsed
+  let s=raw,pri=null,m,t,host,proc,msg,cscSev=null,fortiSev=null;
   if(m=s.match(/^<(\d{1,3})>/)){pri=+m[1];s=s.slice(m[0].length)}
-  if(m=s.match(/^1 (\S+) (\S+) (\S+) (\S+) (\S+) (-|(?:\[.*?\])+) ?(.*)$/)){t=new Date(m[1]);host=m[2];proc=m[3];msg=m[7]}
+  // FortiGate is only detected when the key=value payload itself STARTS the line (after the
+  // optional <PRI> and whitespace) with one of its own lead-in keys, AND devname= appears
+  // somewhere in it - see the FortiGate comment above FORTI_LVL for why both are required.
+  if(/^\s*(?:date|logver|timestamp|eventtime)=/.test(s)&&/\bdevname=/.test(s)){
+   const kv=parseKV(s),ft=fortiTime(kv);
+   if(ft&&!isNaN(ft)){
+    t=ft;host=kv.devname||'unknown-host';proc=[kv.type,kv.subtype].filter(Boolean).join('/')||'fortigate';msg=fortiMsg(kv);
+    const lv=kv.level&&FORTI_LVL[kv.level.toLowerCase()];
+    if(lv!=null)fortiSev=lv;
+   }
+  }
+  else if(m=s.match(/^1 (\S+) (\S+) (\S+) (\S+) (\S+) (-|(?:\[.*?\])+) ?(.*)$/)){t=new Date(m[1]);host=m[2];proc=m[3];msg=m[7]}
+  else if(m=s.match(NXR)){
+   const[,yr2,mon,day,time,ms,h2,fac,sevDigit,,rest]=m,[hh,mi,se]=time.split(':').map(Number),msN=+((ms||'').padEnd(3,'0').slice(0,3)||0),mi2=MON.indexOf(mon);
+   t=new Date(+yr2,mi2,+day,hh,mi,se,msN);
+   host=h2;proc=fac;msg=rest;cscSev=+sevDigit;
+  }
   else if(m=s.match(CSC)){
-   const[,,h2,,mon,day,time,ms,tzAbbr,fac,sevDigit,,rest]=m,[hh,mi,se]=time.split(':').map(Number),msN=+((ms||'').padEnd(3,'0').slice(0,3)||0),yr=new Date().getFullYear(),mi2=MON.indexOf(mon);
+   const[,,h2,,mon,day,yr2,time,ms,tzAbbr,fac,sevDigit,,rest]=m,[hh,mi,se]=time.split(':').map(Number),msN=+((ms||'').padEnd(3,'0').slice(0,3)||0),yr=yr2?+yr2:new Date().getFullYear(),mi2=MON.indexOf(mon);
    t=(tzAbbr==='UTC'||tzAbbr==='GMT')?new Date(Date.UTC(yr,mi2,+day,hh,mi,se,msN)):new Date(yr,mi2,+day,hh,mi,se,msN);
    host=h2||'unknown-host';proc=fac;msg=rest;cscSev=+sevDigit;
   }
   else if(m=s.match(CSC2)){
-   const[,mon,day,time,ms,h2,fac,sevDigit,,rest]=m,[hh,mi,se]=time.split(':').map(Number),msN=+((ms||'').padEnd(3,'0').slice(0,3)||0),yr=new Date().getFullYear(),mi2=MON.indexOf(mon);
+   const[,mon,day,yr2,time,ms,h2,fac,sevDigit,,rest]=m,[hh,mi,se]=time.split(':').map(Number),msN=+((ms||'').padEnd(3,'0').slice(0,3)||0),yr=yr2?+yr2:new Date().getFullYear(),mi2=MON.indexOf(mon);
    t=new Date(yr,mi2,+day,hh,mi,se,msN);
    host=h2;proc=fac;msg=rest;cscSev=+sevDigit;
   }
   else if(m=s.match(/^([A-Z][a-z]{2})\s+(\d{1,2}) (\d\d:\d\d:\d\d) (\S+) ([^\s:\[]+)(?:\[\d+\])?:? ?(.*)$/)){t=new Date(new Date().getFullYear(),MON.indexOf(m[1]),+m[2],...m[3].split(':').map(Number));host=m[4];proc=m[5];msg=m[6]}
   if(!t||isNaN(t)){bad.push(raw);return}
-  ev.push({t,host,proc,msg,raw,sev:pri!=null?pri&7:(cscSev!=null?cscSev:guess(proc+' '+msg)),guessed:pri==null&&cscSev==null});
+  ev.push({t,host,proc,msg,raw,sev:pri!=null?pri&7:(cscSev!=null?cscSev:(fortiSev!=null?fortiSev:guess(proc+' '+msg))),guessed:pri==null&&cscSev==null&&fortiSev==null});
  });
  ev.sort((a,b)=>a.t-b.t);
  const par=ev.map((_,i)=>i),find=x=>par[x]===x?x:(par[x]=find(par[x])),last=new Map();
@@ -397,9 +497,16 @@ function load(text,nm){
  renderMeta();
  rail();pick(first<0?7:first,true);
 }
+/* When a large share of the non-comment lines couldn't be parsed, a small hint near the "N
+   lines could not be parsed" chip suggests it's an unsupported format rather than a few odd
+   lines. Text is set via textContent (not innerHTML) below, so no escaping is needed here;
+   layout otherwise unchanged (reuses the existing .note style). */
+const MANY_UNPARSED_HINT="Many lines weren't recognised. Supported formats: RFC 5424 and RFC 3164 syslog, Cisco IOS/IOS-XE/NX-OS/ASA, Juniper Junos (BSD-style and RFC 5424 structured-data), and FortiGate key=value logs.";
 function renderMeta(){
- $('#meta').innerHTML=`<b>${esc(name)}</b>${D.ev.length} events, ${fmt(D.ev[0].t)} to ${fmt(D.ev.at(-1).t)}${D.bad.length?`<br><button class="chip" id="badb">${D.bad.length} line${D.bad.length>1?'s':''} could not be parsed</button>`:''}`;
+ const total=D.ev.length+D.bad.length,manyBad=D.bad.length>0&&total>0&&D.bad.length/total>=0.2;
+ $('#meta').innerHTML=`<b>${esc(name)}</b>${D.ev.length} events, ${fmt(D.ev[0].t)} to ${fmt(D.ev.at(-1).t)}${D.bad.length?`<br><button class="chip" id="badb">${D.bad.length} line${D.bad.length>1?'s':''} could not be parsed</button>${manyBad?'<div class="note" id="parseHint"></div>':''}`:''}`;
  if($('#badb'))$('#badb').onclick=()=>{$('#list').innerHTML='';$('#detail').innerHTML=`<h2>Unparsed lines</h2><p class="cap">These lines did not match RFC 3164 or RFC 5424.</p><ol class="tl" style="--c:var(--s7)">${D.bad.slice(0,200).map(l=>`<li><code>${esc(l)}</code></li>`).join('')}</ol>`;step(3)};
+ if($('#parseHint'))$('#parseHint').textContent=MANY_UNPARSED_HINT;
 }
 function rail(){
  const cnt=D.by.map((_,i)=>D.ev.filter(e=>e.sev===i).length),mx=Math.max(...cnt,1);

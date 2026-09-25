@@ -24,11 +24,10 @@ function findIncident(incidents, host, msgSubstr) {
   return incidents.find(i => i.host === host && i.ev.some(e => e.msg.includes(msgSubstr)));
 }
 
-test('all 58 real log lines parse, with 0 unparsed (the 4 leading "#" comment lines are correctly left unparsed)', () => {
+test('all 58 real log lines parse, with 0 unparsed (the 4 leading "#" comment lines are skipped entirely, not counted as unparsed)', () => {
   const { ev, bad } = parse(logText);
   assert.equal(ev.length, 58);
-  assert.equal(bad.length, 4);
-  assert.ok(bad.every(l => l.trim().startsWith('#')), 'every unparsed line should be a comment line');
+  assert.equal(bad.length, 0, 'comment lines are skipped outright (see the format-library work), not counted as bad');
 });
 
 test('hostnames are read correctly from the "timestamp: HOST %TAG" format', () => {
@@ -98,25 +97,18 @@ test('grouping: bastion01\'s SEC_LOGIN failures (LOGIN_FAILED + QUIET_MODE_ON) f
   assert.ok(inc.ev.some(e => e.msg.includes('QUIET_MODE_ON') === false && /Still time to wait/.test(e.msg)));
 });
 
-test('grouping: dist-sw1\'s Gi1/0/24 LINK/LINEPROTO events group together', () => {
+test('grouping: dist-sw1\'s Gi1/0/24 LINK/LINEPROTO events group together, now including the abbreviated-name MACFLAP event', () => {
   const incidents = distinctIncidents(parse(logText));
   const inc = findIncident(incidents, 'dist-sw1', 'GigabitEthernet1/0/24, changed state to down');
   assert.ok(inc);
-  assert.equal(inc.ev.length, 4, 'LINK down, LINEPROTO down, LINK up, LINEPROTO up');
-  assert.ok(inc.ev.every(e => e.msg.includes('GigabitEthernet1/0/24')));
-
-  // Documented, debatable case (see HANDOFF.md/report): the SW_MATM MACFLAP event on the same
-  // physical port, in the same time window, uses the abbreviated form "Gi1/0/24" rather than
-  // "GigabitEthernet1/0/24". The grouping rule (`IFR` in syslog-lens.html) treats these as two
-  // different interface-name keys - it does not normalise Cisco's full vs. abbreviated interface
-  // spellings - so this event is NOT linked into the incident above and forms its own incident.
-  // This asserts the rules' actual (current, unchanged) behaviour rather than the intuitively
-  // "correct" merge.
-  const macflap = findIncident(incidents, 'dist-sw1', 'MACFLAP_NOTIF'.replace('_NOTIF', '')) ||
-    incidents.find(i => i.host === 'dist-sw1' && i.ev.some(e => e.msg.includes('is flapping between port Gi1/0/24')));
-  assert.ok(macflap, 'expected a separate dist-sw1 incident for the SW_MATM MACFLAP event');
-  assert.notEqual(macflap, inc, 'the abbreviated "Gi1/0/24" mention does not share a grouping key with "GigabitEthernet1/0/24", so it stays a separate incident');
-  assert.equal(macflap.ev.length, 1);
+  // Interface-name normalisation for grouping keys (see normIface()/NORM_PREFIX in
+  // syslog-lens.html): "Gi1/0/24" and "GigabitEthernet1/0/24" now share a grouping key, so the
+  // SW_MATM MACFLAP event on the same physical port, in the same time window, joins this
+  // incident instead of forming its own singleton (superseding the "debatable case" this test
+  // used to document, where the two spellings didn't share a key).
+  assert.equal(inc.ev.length, 5, 'LINK down, LINEPROTO down, MACFLAP, LINK up, LINEPROTO up');
+  assert.ok(inc.ev.some(e => e.msg.includes('is flapping between port Gi1/0/24')), 'the MACFLAP event should now be part of this incident');
+  assert.ok(inc.ev.filter(e => e.msg.includes('GigabitEthernet1/0/24')).length === 4);
 });
 
 test('OSPF facility + ADJCHG events match the OSPF rule; BGP facility + ADJCHANGE/NOTIFICATION events match the BGP rule', () => {
