@@ -104,6 +104,31 @@ function validateInviteCodeConfig() {
   }
 }
 
+// Known placeholder text left in .env.example (or copy-pasted from it)
+// rather than replaced with a real generated value. Vercel auto-detects a
+// project's .env.example and offers to pre-fill its Environment Variables
+// form from it, so a non-empty placeholder there is a real deployment
+// hazard even though .env.example itself now ships these values blank (see
+// .env.example) — this is a second, independent line of defense that
+// doesn't depend on that file staying blank.
+const PLACEHOLDER_PATTERNS = ['replace-this', 'change-me'];
+
+function findPlaceholderPattern(value) {
+  if (typeof value !== 'string') return null;
+  const lower = value.toLowerCase();
+  return PLACEHOLDER_PATTERNS.find((pattern) => lower.includes(pattern)) || null;
+}
+
+function assertNotPlaceholder(name, value) {
+  const matched = findPlaceholderPattern(value);
+  if (matched) {
+    throw new Error(
+      `${name} looks like a placeholder value (contains "${matched}") rather than a real generated secret. ` +
+        'Generate and set a real value before deploying to production — see .env.example.'
+    );
+  }
+}
+
 // Validates production-only config invariants (JWT_SECRET, INVITE_CODE) and
 // throws if either is missing/invalid. A no-op outside production. Exported
 // so it can run from *any* entry point that boots the Express app — not
@@ -114,7 +139,9 @@ function validateInviteCodeConfig() {
 function assertProductionConfig() {
   if (!IS_PRODUCTION) return;
   validateJwtSecret(JWT_SECRET);
+  assertNotPlaceholder('JWT_SECRET', JWT_SECRET);
   validateInviteCodeConfig();
+  assertNotPlaceholder('INVITE_CODE', INVITE_CODE);
 }
 
 // Express `trust proxy` setting, used to derive req.ip correctly when the
@@ -181,6 +208,7 @@ module.exports = {
   MIN_INVITE_CODE_LENGTH,
   validateInviteCodeConfig,
   assertProductionConfig,
+  findPlaceholderPattern,
   TRUST_PROXY,
   RATE_LIMIT,
 };

@@ -1,8 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "outputDirectory": ".vercel-empty-output",
+  "rewrites": [
+    { "source": "^/(.*)$", "destination": "/api?__path=$1" }
+  ],
   "functions": {
-    "index.js": {
+    "api/index.js": {
       "includeFiles": "{syslog-lens.html,public/**}"
     }
   }
