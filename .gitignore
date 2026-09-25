@@ -5,3 +5,4 @@ server/data/
 *.sqlite3
 dist/
 build/
+.claude/worktrees/

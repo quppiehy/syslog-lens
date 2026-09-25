@@ -323,6 +323,102 @@ function fortiMsg(kv){
 const NORM_PREFIX={gi:'GigabitEthernet',gig:'GigabitEthernet',te:'TenGigabitEthernet',fa:'FastEthernet',po:'Port-channel',eth:'Ethernet'};
 function normIface(name){const m=name.match(/^([A-Za-z-]+)(.*)$/s);if(!m)return name;const canon=NORM_PREFIX[m[1].toLowerCase()];return canon?canon+m[2]:name}
 function keys(e){const k=[],ri=ruleOf(e);if(ri>=0)k.push('a:'+ri);(e.msg.match(IFR)||[]).forEach(x=>k.push('i:'+normIface(x.replace(/[.:]+$/,''))));(e.msg.match(IFR2)||[]).forEach(x=>k.push('i:'+normIface(x)));(e.msg.match(IPR)||[]).forEach(x=>{if(x!=='0.0.0.0')k.push('p:'+x)});(e.msg.match(IP6R)||[]).forEach(x=>{if(x!=='::')k.push('p:'+x)});return k}
+/* Down->recovery pairing (interface link, OSPF adjacency, BGP session). Detects a per-event
+   state transition, gives it a resource id (unique per host+resource, used to bridge a DOWN to
+   its RECOVERY even when they're more than WIN apart) and a human-readable label (used in
+   titles/summaries, host-free since an incident is always single-host). Deliberately narrow:
+   only the wordings already exercised by the test-data library (see HANDOFF.md). Returns null
+   for anything else - most events have no state at all. */
+const MAX_RECOVERY=3600e3;
+function ifaceOf(msg){const m1=msg.match(IFR);if(m1)return normIface(m1[0].replace(/[.:]+$/,''));const m2=msg.match(IFR2);if(m2)return normIface(m2[0]);return null}
+function ifNameOf(msg){const m=msg.match(/ifName\s*[:=]?\s*"?([\w.\/-]+)"?/i);return m?normIface(m[1]):null}
+function stateOf(e){
+ const msg=e.msg;let m;
+ // OSPF, Cisco wording: "Nbr <ip> on <iface> ... from X to DOWN" / "... to FULL".
+ if(m=msg.match(/\bNbr (\S+) on (\S+?)[,.]?\s/i)){
+  const nbr=m[1],ifc=normIface(m[2].replace(/[.:,]+$/,''));
+  if(/\bto DOWN\b/i.test(msg))return{dir:'down',type:'ospf',id:'ospf|'+nbr+'|'+ifc,label:'OSPF neighbor '+nbr+' ('+ifc+')'};
+  if(/\bto FULL\b/i.test(msg))return{dir:'up',type:'ospf',id:'ospf|'+nbr+'|'+ifc,label:'OSPF neighbor '+nbr+' ('+ifc+')'};
+ }
+ // OSPF, Junos wording: "OSPF neighbor <ip> ... state changed from X to Down/Full".
+ if(m=msg.match(/\bOSPF neighbor (\S+)\b/i)){
+  const nbr=m[1];
+  if(/\bto Down\b/i.test(msg))return{dir:'down',type:'ospf',id:'ospf|'+nbr,label:'OSPF neighbor '+nbr};
+  if(/\bto Full\b/i.test(msg))return{dir:'up',type:'ospf',id:'ospf|'+nbr,label:'OSPF neighbor '+nbr};
+ }
+ // Interface LINK/LINEPROTO/SPANTREE-style "changed state to down/up".
+ if(/\bchanged state to down\b/i.test(msg)){const ifc=ifaceOf(msg);if(ifc)return{dir:'down',type:'iface',id:'iface|'+ifc,label:ifc}}
+ if(/\bchanged state to up\b/i.test(msg)){const ifc=ifaceOf(msg);if(ifc)return{dir:'up',type:'iface',id:'iface|'+ifc,label:ifc}}
+ // NX-OS ETHPORT-style "<iface> is down" / "<iface> is up" - only when a real interface name
+ // (IFR/IFR2) is present; a bare generic word ("Link is down") must never become a resource id.
+ if(/\bis down\b/i.test(msg)){const ifc=ifaceOf(msg);if(ifc)return{dir:'down',type:'iface',id:'iface|'+ifc,label:ifc}}
+ if(/\bis up\b/i.test(msg)){const ifc=ifaceOf(msg);if(ifc)return{dir:'up',type:'iface',id:'iface|'+ifc,label:ifc}}
+ // Junos SNMP link trap.
+ if(/SNMP_TRAP_LINK_DOWN\b/.test(msg)){const ifc=ifNameOf(msg);if(ifc)return{dir:'down',type:'iface',id:'iface|'+ifc,label:ifc}}
+ if(/SNMP_TRAP_LINK_UP\b/.test(msg)){const ifc=ifNameOf(msg);if(ifc)return{dir:'up',type:'iface',id:'iface|'+ifc,label:ifc}}
+ // BGP, Cisco ADJCHANGE/NOTIFICATION wording: "neighbor <ip> Down/Up", "hold time expired".
+ if(m=msg.match(/\bneighbor (\S+) Down\b/i))return{dir:'down',type:'bgp',id:'bgp|'+m[1],label:'BGP peer '+m[1]};
+ if(m=msg.match(/\bneighbor (\S+) Up\b/i))return{dir:'up',type:'bgp',id:'bgp|'+m[1],label:'BGP peer '+m[1]};
+ if((m=msg.match(/\bneighbor (\S+)\b/i))&&/hold time expired/i.test(msg))return{dir:'down',type:'bgp',id:'bgp|'+m[1],label:'BGP peer '+m[1]};
+ // BGP, Junos wording: "BGP peer <ip> ... changed state from X to Y".
+ if(m=msg.match(/\bBGP peer (\S+)\b/i)){
+  if(/\bto Idle\b/i.test(msg)||/from Established to/i.test(msg))return{dir:'down',type:'bgp',id:'bgp|'+m[1],label:'BGP peer '+m[1]};
+  if(/\bto Established\b/i.test(msg))return{dir:'up',type:'bgp',id:'bgp|'+m[1],label:'BGP peer '+m[1]};
+ }
+ return null;
+}
+/* Pairs DOWN events with their matching RECOVERY (same host+resource id, chronological, a
+   recovery closes only the most recent open DOWN for that resource) within MAX_RECOVERY. Works
+   on any chronologically-sorted array of events - the full parsed log (for deciding unions,
+   indices relative to that array) or a single incident's own event list (for building summary
+   sentences, re-run independently so it needs no extra bookkeeping threaded through grouping).
+   A pair's `significant` flag marks a gap bigger than WIN: exactly the case normal 300s chaining
+   wouldn't already have grouped, so it's the only kind worth calling out in a summary (a same-
+   incident down/up cycle that closed within WIN is already implied by the rest of the wording). */
+function pairEvents(events){
+ const opens=new Map(),pairs=[],unmatched=[];
+ events.forEach((e,idx)=>{
+  const st=stateOf(e);if(!st)return;
+  const rid=e.host+'|'+st.id;
+  if(st.dir==='down'){
+   // A second DOWN for the same still-open resource (e.g. LINEPROTO restating what LINK already
+   // reported) is the same outage restated, not a new one - keep the earlier timestamp and don't
+   // treat the first sighting as unmatched.
+   if(!opens.has(rid))opens.set(rid,{idx,e,label:st.label,type:st.type});
+  }else{
+   const open=opens.get(rid);
+   if(open){
+    opens.delete(rid);
+    const ms=e.t-open.e.t;
+    if(ms<=MAX_RECOVERY)pairs.push({downIdx:open.idx,upIdx:idx,down:open.e,up:e,label:open.label,type:open.type,ms,significant:ms>WIN});
+    // A recovery did arrive, just beyond MAX_RECOVERY - record it (lateRecovery) so callers can
+    // report that fact accurately, distinct from a DOWN with no recovery at all in the log.
+    else unmatched.push({...open,lateRecovery:e});
+   }
+  }
+ });
+ opens.forEach(o=>unmatched.push(o));
+ return{pairs,unmatched};
+}
+/* lateRecoveryByDown (optional): a Map from a DOWN event to its RECOVERY event, for pairs that
+   exist somewhere in the *whole log* but more than MAX_RECOVERY apart - see parse() below, where
+   it's built once (from the same full-log pairEvents() call already needed for grouping) and
+   threaded through describe() to every incident. Needed because a DOWN and its late RECOVERY can
+   end up in two different incidents (that's exactly what "beyond the correlation window" means),
+   so recomputing pairEvents() on just this one incident's own events can't see the RECOVERY half
+   sitting in the *other* incident - without this map, a genuinely-late recovery would be
+   misreported as no recovery at all. */
+function pairingSentences(es,lateRecoveryByDown){
+ const{pairs,unmatched}=pairEvents(es),parts=[];
+ pairs.filter(p=>p.significant).forEach(p=>parts.push(`${esc(p.label)} was down for approximately ${dur(p.ms)} before recovering.`));
+ unmatched.forEach(u=>{
+  const late=u.lateRecovery||(lateRecoveryByDown&&lateRecoveryByDown.get(u.e));
+  parts.push(late
+   ?`${esc(u.label)} did not recover within 1 hour; a later recovery at ${esc(fmt(late.t))} is outside the correlation window.`
+   :`${esc(u.label)} went down and no recovery was seen in this log.`);
+ });
+ return parts;
+}
 const SL=['Emergency','Alert','Critical','Error','Warning','Notice','Informational','Debug'],PL=['Emergencies','Alerts','Critical','Errors','Warnings','Notices','Informational','Debug'];
 const pl=(n,w)=>n+' '+w+(n===1?'':'s'),N=(es,re)=>es.filter(e=>re.test(e.msg)).length,lst=a=>a.length>2?a.slice(0,-1).join(', ')+', and '+a.at(-1):a.join(' and ');
 /* Vendor-neutral predicate for "this single event IS a failed authentication attempt" (as
@@ -397,6 +493,25 @@ const INCIDENT_RULES=[
    const kind='Repeated authentication failures',subj=src&&'source '+src;
    return{kind,subj,txt:`${B(host)} logged ${n} related events from ${src?'source '+B(src):'one source'} over ${d}. The sequence includes ${lst(p)}.`};
   }},
+ {name:'iface',
+  // Placed after bgp/ospf/auth so those keep precedence when an interface event is only part of
+  // a bigger BGP/OSPF/auth story (e.g. network-incidents.log's OSPF incidents, which also carry
+  // LINK_STATE events on the same interface). Only wins when interface link/lineproto/ethport/
+  // SNMP-trap events dominate (at least half the group) and are all on the same interface.
+  // noKey: deliberately excluded from ruleOf()/keys() - unlike bgp/ospf/auth, "matches this rule"
+  // says nothing about *which* interface, so it must never become a same-host grouping key (that
+  // would wrongly bridge two different interfaces flapping within the same 300s window).
+  noKey:true,
+  match:es=>{
+   const st=es.map(stateOf).filter(s=>s&&s.type==='iface');
+   if(!st.length)return false;
+   return new Set(st.map(s=>s.label)).size===1&&st.length*2>=es.length;
+  },
+  build:(es,apps,host,n,d,B)=>{
+   const st=es.map(stateOf).filter(s=>s&&s.type==='iface'),ifc=st[0].label;
+   const kind=(st.some(s=>s.dir==='down')&&st.some(s=>s.dir==='up'))?'Interface flap':'Interface down';
+   return{kind,subj:ifc,txt:`${B(host)} logged ${n} related events on ${B(ifc)} over ${d}.`};
+  }},
  {name:'generic',fallback:true,
   match:()=>true,
   build:(es,apps,host,n,d,B)=>{
@@ -405,14 +520,15 @@ const INCIDENT_RULES=[
    return{kind,subj:'',txt:n>1?`${B(host)} logged ${n} related events from ${esc(apps.join(', '))} over ${d}. Highest severity: ${SL[v]}.`:`${B(host)} logged a single ${SL[v]} event.`};
   }}
 ];
-/* Index of the first non-fallback rule a single event matches on its own, or -1. Used only for
-   grouping (see keys()); describe() below matches whole candidate groups instead. */
-function ruleOf(e){for(let i=0;i<INCIDENT_RULES.length;i++){if(!INCIDENT_RULES[i].fallback&&INCIDENT_RULES[i].match([e]))return i}return-1}
-function describe(es,apps){
+/* Index of the first non-fallback, non-noKey rule a single event matches on its own, or -1. Used
+   only for grouping (see keys()); describe() below matches whole candidate groups instead. */
+function ruleOf(e){for(let i=0;i<INCIDENT_RULES.length;i++){if(!INCIDENT_RULES[i].fallback&&!INCIDENT_RULES[i].noKey&&INCIDENT_RULES[i].match([e]))return i}return-1}
+function describe(es,apps,lateRecoveryByDown){
  const host=es[0].host,d=dur(es.at(-1).t-es[0].t),n=es.length,B=x=>`<b>${esc(x)}</b>`;
  const rule=INCIDENT_RULES.find(r=>r.match(es));
  const{kind,subj,txt}=rule.build(es,apps,host,n,d,B);
- return{kind,subject:subj,title:kind+(subj?' — '+subj:''),summary:txt};
+ const extra=pairingSentences(es,lateRecoveryByDown),summary=extra.length?txt+' '+extra.join(' '):txt;
+ return{kind,subject:subj,title:kind+(subj?' — '+subj:''),summary};
 }
 function parse(text){
  const ev=[],bad=[];
@@ -455,19 +571,52 @@ function parse(text){
  ev.sort((a,b)=>a.t-b.t);
  const par=ev.map((_,i)=>i),find=x=>par[x]===x?x:(par[x]=find(par[x])),last=new Map();
  ev.forEach((e,i)=>keys(e).forEach(k=>{const id=e.host+'|'+k,q=last.get(id);if(q&&e.t-q.t<=WIN)par[find(i)]=find(q.i);last.set(id,{t:e.t,i})}));
+ // Down->recovery bridge: a RECOVERY links to its matching (same host+resource) open DOWN even
+ // when they're more than WIN apart, as long as it's within MAX_RECOVERY - see pairEvents()
+ // above. Only the recovery event itself is unioned; normal WIN-based chaining above already
+ // pulled each side's immediate neighbours (e.g. LINEPROTO next to LINK) into their own half, so
+ // this one extra link is what merges the two halves into a single incident.
+ // Computed once over the whole log (not per-incident) and reused for two things: the union
+ // above, and a DOWN->its late RECOVERY lookup handed to every incident's describe() call, so a
+ // DOWN whose RECOVERY lands in a *different* incident (because it's beyond MAX_RECOVERY, the
+ // exact case that keeps them from merging) can still be reported as "recovered late" rather
+ // than "no recovery was seen" - see pairingSentences()'s lateRecoveryByDown parameter.
+ const bridge=pairEvents(ev);
+ bridge.pairs.forEach(p=>{par[find(p.upIdx)]=find(p.downIdx)});
+ const lateRecoveryByDown=new Map();
+ bridge.unmatched.forEach(u=>{if(u.lateRecovery)lateRecoveryByDown.set(u.e,u.lateRecovery)});
  const g=new Map();
  ev.forEach((e,i)=>{const r=find(i);if(!g.has(r))g.set(r,[]);g.get(r).push(e)});
- const by=[[],[],[],[],[],[],[],[]];
+ const incidents=[];
  g.forEach(es=>{
   const apps=[...new Set(es.map(e=>e.proc))];
-  const inc={host:es[0].host,proc:apps.join(', '),ev:es,sevs:[...new Set(es.map(e=>e.sev))].sort(),...describe(es,apps)};
-  inc.sevs.forEach(v=>by[v].push(inc));
+  incidents.push({host:es[0].host,proc:apps.join(', '),ev:es,sevs:[...new Set(es.map(e=>e.sev))].sort(),...describe(es,apps,lateRecoveryByDown)});
  });
+ // Related hints (informational only, never affects grouping): incidents on the same host whose
+ // first events land within 5s of each other and concern a different named resource (subject).
+ // Bucketed by host and sorted by first-event time so each incident only compares against its
+ // near-in-time neighbours (a sliding window over a sorted array) instead of every incident in
+ // the log - O(n log n) instead of O(n^2), which matters once a log has thousands of incidents.
+ const RELATED_WIN=5000,byHost=new Map();
+ incidents.forEach(inc=>{inc.related=[];if(!inc.subject)return;if(!byHost.has(inc.host))byHost.set(inc.host,[]);byHost.get(inc.host).push(inc)});
+ byHost.forEach(list=>{
+  list.sort((a,b)=>a.ev[0].t-b.ev[0].t);
+  for(let i=0;i<list.length;i++){
+   for(let j=i+1;j<list.length&&list[j].ev[0].t-list[i].ev[0].t<=RELATED_WIN;j++){
+    const a=list[i],b=list[j];
+    if(a.subject===b.subject)continue;
+    a.related.push({title:b.title,subject:b.subject});
+    b.related.push({title:a.title,subject:a.subject});
+   }
+  }
+ });
+ const by=[[],[],[],[],[],[],[],[]];
+ incidents.forEach(inc=>inc.sevs.forEach(v=>by[v].push(inc)));
  by.forEach((a,v)=>a.sort((x,y)=>y.ev.filter(e=>e.sev===v).length-x.ev.filter(e=>e.sev===v).length||x.ev[0].t-y.ev[0].t));
  return{ev,bad,by};
 }
 /* Exposed for automated tests only; not used by the UI itself. */
-if(typeof window!=='undefined')window.SyslogLens={parse,guess,describe,keys,gapInfo,isAuthFailure,buildSummaryReport,buildIncidentReport,summaryFilename,incidentFilename,reportGenTimestamp,reportTzOffset,generatedByLine,slug};
+if(typeof window!=='undefined')window.SyslogLens={parse,guess,describe,keys,gapInfo,isAuthFailure,buildSummaryReport,buildIncidentReport,summaryFilename,incidentFilename,reportGenTimestamp,reportTzOffset,generatedByLine,slug,stateOf,pairEvents};
 
 /* UTC/local display toggle. Every timestamp the app *parses* keeps its real instant regardless
    of this setting (RFC 3164 and Cisco lines with no timezone of their own are parsed as local
@@ -550,7 +699,7 @@ function show(k){
  const mx=Math.max(...bk);
  $('#detail').style.setProperty('--c',`var(--s${sel})`);
  $('#detail').innerHTML=`<div class="dh"><div><h2>${esc(i.kind)}</h2><div class="sub">${esc(i.host)}${i.subject?' · '+esc(i.subject):''}</div></div><button class="btn tgl" id="tgl" type="button">${Object.values(SEC).some(Boolean)?'Collapse all':'Expand all'}</button></div>
- <details class="sec" data-sec="sum"${SEC.sum?' open':''}><summary>Incident summary</summary><div class="body"><p class="story">${i.summary}</p><p class="note">Generated from the parsed log lines. It describes the events; it is not a diagnosis.</p></div></details>
+ <details class="sec" data-sec="sum"${SEC.sum?' open':''}><summary>Incident summary</summary><div class="body"><p class="story">${i.summary}</p><p class="note">Generated from the parsed log lines. It describes the events; it is not a diagnosis.</p>${i.related&&i.related.length?`<p class="note">Possibly related: ${i.related.map(r=>esc(r.subject)+' changed state at approximately the same time').join('; ')}.</p>`:''}</div></details>
  <details class="sec" data-sec="ov"${SEC.ov?' open':''}><summary>Event overview</summary><div class="body"><dl class="sum"><div><dt>Events</dt><dd>${e.length}</dd></div><div><dt>First seen</dt><dd>${fmt(a)}</dd></div><div><dt>Last seen</dt><dd>${fmt(b)}</dd></div><div><dt>Duration</dt><dd>${dur(span)}</dd></div><div><dt>Processes</dt><dd>${esc(i.proc)}</dd></div><div class="wide"><dt>Severities</dt><dd>${bd(i,sel)}</dd></div></dl>
  <div class="spark" aria-hidden="true">${bk.map(n=>`<i style="height:${n/mx*100}%;${n?'':'opacity:.15'}"></i>`).join('')}</div><div class="cap">Events over time</div></div></details>
  <details class="sec" data-sec="tl"${SEC.tl?' open':''}><summary>Timeline <span class="cnt">${pl(e.length,'event')}</span></summary><div class="body"><p class="cap">Events at the selected severity are highlighted. Spacing grows with the silence between events.</p>
