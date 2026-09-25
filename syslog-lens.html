@@ -325,6 +325,27 @@ function normIface(name){const m=name.match(/^([A-Za-z-]+)(.*)$/s);if(!m)return 
 function keys(e){const k=[],ri=ruleOf(e);if(ri>=0)k.push('a:'+ri);(e.msg.match(IFR)||[]).forEach(x=>k.push('i:'+normIface(x.replace(/[.:]+$/,''))));(e.msg.match(IFR2)||[]).forEach(x=>k.push('i:'+normIface(x)));(e.msg.match(IPR)||[]).forEach(x=>{if(x!=='0.0.0.0')k.push('p:'+x)});(e.msg.match(IP6R)||[]).forEach(x=>{if(x!=='::')k.push('p:'+x)});return k}
 const SL=['Emergency','Alert','Critical','Error','Warning','Notice','Informational','Debug'],PL=['Emergencies','Alerts','Critical','Errors','Warnings','Notices','Informational','Debug'];
 const pl=(n,w)=>n+' '+w+(n===1?'':'s'),N=(es,re)=>es.filter(e=>re.test(e.msg)).length,lst=a=>a.length>2?a.slice(0,-1).join(', ')+', and '+a.at(-1):a.join(' and ');
+/* Vendor-neutral predicate for "this single event IS a failed authentication attempt" (as
+   opposed to a related-but-different event, like a lockout/ban consequence, or a successful
+   login). Used by the 'auth' incident rule's summary count so it isn't tied to OpenSSH wording.
+   Checked against the message and, where useful, the process/tag field. */
+function isAuthFailure(e){
+ const msg=(e&&e.msg)||'',proc=(e&&e.proc)||'';
+ // Exclude successes / unrelated consequences before checking failure wording, since some of
+ // those (e.g. Cisco's QUIET_MODE_ON) share the SEC_LOGIN facility with real failures.
+ if(/\b(login|logon|authentication)\s+(succeeded|successful)\b|password changed|QUIET_MODE_ON/i.test(msg))return false;
+ // Well-known vendor-specific failure signatures.
+ if(/Failed password|Invalid user|SSHD_LOGIN_FAILED|admin login failed/i.test(msg))return true;
+ if(/authentication failure|authentication failed/i.test(msg))return true;
+ if(/\bLOGIN_FAILED\b/i.test(msg)||/\bLOGIN_FAILED\b/i.test(proc))return true;
+ if(/\blogin failed\b/i.test(msg))return true;
+ if(/\baction=["']?login["']?/i.test(msg)&&/\bstatus=["']?fail(?:ed|ure)?["']?/i.test(msg))return true;
+ // Generic: an auth-ish word near a failure-ish word, either order, within a short span.
+ const authWord='login|logon|auth|authentication|password',failWord='fail(?:ed|ure)?|denied|invalid|rejected';
+ if(new RegExp(`\\b(?:${authWord})\\b[^.\\n]{0,30}\\b(?:${failWord})\\b`,'i').test(msg))return true;
+ if(new RegExp(`\\b(?:${failWord})\\b[^.\\n]{0,30}\\b(?:${authWord})\\b`,'i').test(msg))return true;
+ return false;
+}
 const topk=(es,p)=>{const c=new Map();es.forEach(e=>keys(e).forEach(k=>{if(k[0]===p)c.set(k,(c.get(k)||0)+1)}));return[...c].sort((a,b)=>b[1]-a[1]).map(x=>x[0].slice(2))};
 const bd=(i,hl)=>i.sevs.map(v=>{const n=i.ev.filter(e=>e.sev===v).length,t=n+' '+(n===1?SL[v]:PL[v]);return v===hl?`<b style="color:var(--s${v})">${t}</b>`:t}).join(' · ');
 /* Declarative incident-type rules: classify by message/process patterns, then build a title and
@@ -369,7 +390,7 @@ const INCIDENT_RULES=[
  {name:'auth',
   match:es=>N(es,/Failed password|authentication failure/i)>1||es.filter(e=>/SEC_LOGIN/i.test(e.proc)).length>1,
   build:(es,apps,host,n,d,B)=>{
-   const src=topk(es,'p')[0]||'',f=N(es,/Failed password|authentication failure/i),u=[...new Set(es.flatMap(e=>{const m=e.msg.match(/for (?:invalid user )?(\S+) from|user=(\S+)/);return m?[m[1]||m[2]]:[]}))],p=[];
+   const src=topk(es,'p')[0]||'',f=es.filter(isAuthFailure).length,u=[...new Set(es.flatMap(e=>{const m=e.msg.match(/for (?:invalid user )?(\S+) from|user=(\S+)/);return m?[m[1]||m[2]]:[]}))],p=[];
    p.push(`${f} failed logins${u.length?' targeting '+lst(u.map(esc)):''}`);
    N(es,/maximum authentication attempts/)&&p.push('the maximum-attempts limit being hit');
    N(es,/\bBan\b/)&&p.push('the source being banned');
@@ -446,7 +467,7 @@ function parse(text){
  return{ev,bad,by};
 }
 /* Exposed for automated tests only; not used by the UI itself. */
-if(typeof window!=='undefined')window.SyslogLens={parse,guess,describe,keys,gapInfo,buildSummaryReport,buildIncidentReport,summaryFilename,incidentFilename,reportGenTimestamp,reportTzOffset,generatedByLine,slug};
+if(typeof window!=='undefined')window.SyslogLens={parse,guess,describe,keys,gapInfo,isAuthFailure,buildSummaryReport,buildIncidentReport,summaryFilename,incidentFilename,reportGenTimestamp,reportTzOffset,generatedByLine,slug};
 
 /* UTC/local display toggle. Every timestamp the app *parses* keeps its real instant regardless
    of this setting (RFC 3164 and Cisco lines with no timezone of their own are parsed as local
