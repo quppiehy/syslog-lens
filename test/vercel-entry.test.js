@@ -1,8 +1,8 @@
 'use strict';
 // Unit + integration coverage for api/index.js's path-restoring shim.
 //
-// vercel.json rewrites every request to "/api?__path=$1" (see api/index.js
-// for the full reasoning, grounded in
+// vercel.json rewrites every request to "/api?__path=:path*" (see
+// api/index.js for the full reasoning, grounded in
 // https://vercel.com/docs/project-configuration/vercel-json#rewrites),
 // which means the function receives the DESTINATION path/query, not the
 // one the browser requested. These tests prove the shim correctly

@@ -16,20 +16,30 @@
 // to this one Node.js function in `/api`.
 //
 // Preserving the original path/query across the rewrite: per
-// https://vercel.com/docs/project-configuration/vercel-json#rewrites, a
-// rewrite hands the target the DESTINATION path, not the path the browser
-// requested — the docs' own example rewrites "/resize/:width/:height" to
-// "/api/sharp" and shows the result as "/api/sharp?width=800&height=600"
-// (the source's captured segments end up as query parameters on the
-// destination, not appended to its path), and the regex-capture-group
-// example on the same page shows a capture (`$1`) can be substituted
-// directly into the destination, including into its query string. So
-// `vercel.json`'s rewrite is `"^/(.*)$"` -> `"/api?__path=$1"`: every
-// request reaches this function with `req.url` equal to `/api` plus a
-// `__path` query parameter holding the ORIGINAL path (and Vercel merges any
-// of the request's own query parameters in alongside it). `req.query` is
-// one of the Node.js helper properties Vercel populates on the request
-// object (https://vercel.com/docs/functions/runtimes/node-js#node.js-helpers).
+// https://vercel.com/docs/project-configuration/vercel-json#rewrites,
+// `rewrites[].source` is a path-to-regexp pattern, NOT a raw anchored regex
+// — an earlier version of this file used `"^/(.*)$"` as the source, which
+// doesn't match path-to-regexp syntax and silently never matched anything in
+// production (confirmed live: `/` and `/login` came back as Vercel's own
+// `404 NOT_FOUND`, while `/api` itself worked because it's served directly
+// by the function). The docs' own examples use named parameters instead —
+// `"/resize/:width/:height"` -> `"/api/sharp"` (captured segments become
+// query params on the destination) and `"/proxy/:match*"` ->
+// `"https://example.com/:match*"` (the same named param, referenced by name,
+// substitutes into the destination's path or query). So `vercel.json`'s
+// rewrite is `"/:path*"` -> `"/api?__path=:path*"`: every request reaches
+// this function with `req.url` equal to `/api` plus a `__path` query
+// parameter holding the ORIGINAL path (empty string for `/`, since `:path*`
+// matches zero segments), and Vercel merges any of the request's own query
+// parameters in alongside it. `req.query` is one of the Node.js helper
+// properties Vercel populates on the request object
+// (https://vercel.com/docs/functions/runtimes/node-js#node.js-helpers).
+//
+// A request to `/api` itself is unaffected by this rewrite: per the same
+// docs page, "precedence is given to the filesystem prior to rewrites being
+// applied" (rewrites "check the filesystem by default"), and `/api` is
+// itself a filesystem function route (this file), so it's invoked directly
+// with no `__path` — the shim below leaves `req.url` alone in that case.
 //
 // The shim below reads `__path` back off `req.query`, reassembles the
 // original `req.url` (path + any remaining query parameters) before Express

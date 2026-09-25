@@ -92,13 +92,25 @@ test('rewrites contains a catch-all rewrite that routes every request to the /ap
 
   const catchAll = config.rewrites.find((r) => {
     if (typeof r.source !== 'string' || typeof r.destination !== 'string') return false;
-    // Accept any regex/path pattern that matches everything (e.g. "/(.*)"
-    // or "^/(.*)$"), routed to the /api function.
-    const matchesEverything = /\(\.\*\)/.test(r.source);
+    // vercel.json rewrites use path-to-regexp syntax, not raw anchored
+    // regex (a bare "^/(.*)$" source silently never matches in production —
+    // see api/index.js's header comment). Accept either the path-to-regexp
+    // wildcard capture "(.*)" or a named zero-or-more segment matcher like
+    // "/:path*", routed to the /api function.
+    const matchesEverything = /\(\.\*\)/.test(r.source) || /^\/:[A-Za-z_$][A-Za-z0-9_$]*\*$/.test(r.source);
     const routesToApi = /^\/api(\?|$)/.test(r.destination);
     return matchesEverything && routesToApi;
   });
   assert.ok(catchAll, 'expected a catch-all rewrite (matching every path) whose destination is the /api function');
+});
+
+test('the catch-all rewrite is not a raw anchored regex (path-to-regexp does not support ^ and $ anchors)', () => {
+  const config = readVercelConfig();
+  for (const r of config.rewrites) {
+    if (typeof r.source === 'string') {
+      assert.ok(!r.source.startsWith('^') && !r.source.endsWith('$'), `rewrite source "${r.source}" looks like a raw anchored regex, not path-to-regexp syntax`);
+    }
+  }
 });
 
 test('functions config includes syslog-lens.html and public/** so the Vercel entry point can read them at runtime', () => {
