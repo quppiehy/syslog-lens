@@ -1,0 +1,15 @@
+# SYNTHETIC CISCO IOS SYSLOG TEST DATA - NOT REAL PRODUCTION LOGS
+# FOR SYSLOG LENS TESTING ONLY. Fake hostnames; RFC 5737/1918 addresses only.
+# Classic Cisco IOS collector format: <PRI>seq: host: *Mon Day HH:MM:SS.mmm: %FACILITY-SEV-MNEMONIC: message
+<187>5001: access-rtr1: *Sep 25 09:00:01.114: %LINK-3-UPDOWN: Interface FastEthernet0/1, changed state to down
+<189>5002: access-rtr1: *Sep 25 09:00:03.220: %LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/1, changed state to down
+<187>5003: access-rtr1: *Sep 25 09:00:20.500: %LINK-3-UPDOWN: Interface FastEthernet0/1, changed state to up
+<189>5004: access-rtr1: *Sep 25 09:00:22.812: %LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/1, changed state to up
+5005: branch-rtr2: *Sep 25 09:02:10.004: %SYS-5-CONFIG_I: Configured from console by admin on vty0
+<188>6001: branch-rtr2: *Sep 25 09:05:00.010: %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 198.51.100.77] [localport: 22]
+<188>6002: branch-rtr2: *Sep 25 09:05:04.220: %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 198.51.100.77] [localport: 22]
+<185>6003: branch-rtr2: *Sep 25 09:05:20.900: %SEC_LOGIN-1-QUIET_MODE_ON: Still time to wait, [user: admin] [Source: 198.51.100.77]
+<190>7001: dist-sw9: *Sep 25 09:10:12.660: %SPANTREE-6-PORT_STATE: Port GigabitEthernet1/0/5 instance 0 moving from listening to forwarding
+<186>7002: dist-sw9: *Sep 25 09:10:30.005: %SPANTREE-2-ROOTGUARD_BLOCK: Root guard blocking port Gi1/0/5 on VLAN0030
+8001: core-rtr9: *Sep 25 09:15:00.400: %OSPF-4-ERRRCV: Received invalid packet: mismatch area ID from 192.0.2.201
+<191>8002: core-rtr9: *Sep 25 09:20:00.100: %SYS-7-DEBUG_OK: Crypto engine self-test passed

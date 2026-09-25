@@ -1,0 +1,131 @@
+# SYNTHETIC MESSY CISCO IOS-STYLE SYSLOG DATA
+# NOT REAL PRODUCTION LOGS - FOR SYSLOG LENS STRESS TESTING ONLY
+# Fake hostnames and documentation/private IP addresses are used.
+# Deliberately contains noise, duplicates, overlapping incidents, and out-of-order events.
+# Do not treat this file as a canonical expected-output fixture.
+
+Sep 25 14:07:25.517: edge-rtr2 %BGP-3-NOTIFICATION: received from neighbor 198.51.100.10 4/0 (Hold Time Expired)
+Sep 25 14:11:47.574: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:25:20.470: access-sw2 %SPANTREE-2-ROOTGUARD_BLOCK: Root guard blocking port Gi1/0/12 on VLAN0100
+Sep 25 14:16:41.413: access-sw4 %SYS-5-CONFIG_I: Configured from console by admin on vty0
+Sep 25 14:11:13.161: edge-rtr1 %NTP-5-PEERREACH: Peer 192.0.2.123 is reachable
+Sep 25 14:07:38.616: edge-rtr2 %BGP-5-ADJCHANGE: neighbor 198.51.100.10 Up
+Sep 25 14:26:37.285: edge-rtr2 %LINK-5-CHANGED: Interface GigabitEthernet0/2, changed state to up
+Sep 25 14:15:10.781: dist-sw1 %SW_MATM-4-MACFLAP_NOTIF: Host 0050.56aa.1020 in vlan 120 is flapping between port Gi1/0/24 and port Gi1/0/10
+Sep 25 14:19:24.408: dist-sw2 %OSPF-5-ADJCHG: Process 1, Nbr 10.0.23.3 on GigabitEthernet0/2 from 2WAY to FULL, Loading Done
+Sep 25 14:03:01.388: dist-sw3 %LLDP-4-NEIGHBOR_NEW: New neighbor detected on GigabitEthernet0/2
+Sep 25 14:21:25.777: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:21:39.163: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:15:04.980: dist-sw1 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet1/0/24, changed state to down
+Sep 25 14:21:11.890: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:25:10.044: access-sw2 %SPANTREE-5-TOPO_CHG: Topology Change Notice received on VLAN0100
+Sep 25 14:01:01.887: core-rtr3 %ASA-6-302014: Teardown TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:02:28.228: core-rtr1 %OSPF-5-ADJCHG: Process 1, Nbr 10.0.12.2 on GigabitEthernet0/1 from LOADING to FULL, Loading Done
+Sep 25 14:20:25.123: edge-fw01 %SYS-6-LOGGINGHOST_STARTSTOP: Logging to host 192.0.2.200 port 514 started
+Sep 25 14:21:46.714: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:03:33.332: dc-leaf1 %SNMP-5-COLDSTART: SNMP agent on host is reinitializing
+Sep 25 14:15:48.104: dist-sw1 %LINK-3-UPDOWN: Interface GigabitEthernet1/0/24, changed state to up
+Sep 25 14:12:15.718: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:11:40.027: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:22:50.352: dist-rtr1 %HSRP-5-STATECHANGE: GigabitEthernet0/1 Grp 10 state Standby -> Active
+Sep 25 14:15:51.094: dist-sw1 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet1/0/24, changed state to up
+Sep 25 14:22:22.243: access-sw3 %CDP-4-DUPLEX_MISMATCH: Duplex mismatch discovered on GigabitEthernet1/0/8
+Sep 25 14:25:13.747: access-sw2 %SPANTREE-6-PORT_STATE: VLAN0100 Gi1/0/12 changed state to forwarding
+Sep 25 14:06:50.758: edge-rtr1 %BGP-5-ADJCHANGE: neighbor 203.0.113.1 Down User reset
+Sep 25 14:25:08.689: edge-fw01 %ASA-6-302014: Teardown TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:11:38.519: access-sw1 %SYS-6-LOGGINGHOST_STARTSTOP: Logging to host 192.0.2.200 port 514 started
+Sep 25 14:23:11.270: dist-rtr1 %HSRP-4-DUPADDR: Duplicate address 10.10.10.1 on GigabitEthernet0/1
+Sep 25 14:10:42.787: dc-leaf1 %ASA-6-302013: Built inbound TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:02:19.281: core-rtr1 %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to up
+Sep 25 14:02:03.142: core-rtr2 %OSPF-5-ADJCHG: Process 1, Nbr 10.0.12.1 on GigabitEthernet0/1 from FULL to DOWN, Neighbor Down: Dead timer expired
+Sep 25 14:30:27.598: access-sw3 %SYS-5-CONFIG_I: Configured from console by admin on vty0
+Sep 25 14:12:26.159: bastion02 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:20:57.284: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:12:08.665: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:29:07.292: bastion01 %NTP-5-PEERREACH: Peer 192.0.2.123 is reachable
+Sep 25 14:21:16.072: dc-leaf2 %SNMP-5-COLDSTART: SNMP agent on host is reinitializing
+Sep 25 14:23:19.248: dc-leaf2 %DHCP-4-ADDRESS_ASSIGN: DHCP address 10.20.30.80 assigned to client 0050.56aa.1234
+Sep 25 14:06:27.469: edge-fw02 %LINK-5-CHANGED: Interface GigabitEthernet0/2, changed state to up
+Sep 25 14:13:40.940: dist-sw1 %SYS-6-LOGGINGHOST_STARTSTOP: Logging to host 192.0.2.200 port 514 started
+Sep 25 14:02:00.654: core-rtr1 %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down
+Sep 25 14:02:04.025: core-rtr1 %OSPF-5-ADJCHG: Process 1, Nbr 10.0.12.2 on GigabitEthernet0/1 from FULL to DOWN, Neighbor Down: Dead timer expired
+Sep 25 14:10:09.696: dc-leaf1 %ASA-6-302014: Teardown TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:09:17.610: core-rtr3 %LINK-5-CHANGED: Interface GigabitEthernet0/2, changed state to up
+Sep 25 14:18:30.367: edge-fw01 %ASA-4-113019: Group = VPN-PARTNER, IP = 198.51.100.20, Session disconnected. Session Type: IPsec
+Sep 25 14:30:07.753: dist-sw2 %SYS-5-CONFIG_I: Configured from console by admin on vty0
+Sep 25 14:02:06.759: core-rtr1 %OSPF-5-ADJCHG: Process 1, Nbr 10.0.12.2 on GigabitEthernet0/1 from FULL to DOWN, Neighbor Down: Dead timer expired
+Sep 25 14:28:33.388: bastion01 %SYS-5-CONFIG_I: Configured from console by admin on vty0
+Sep 25 14:04:53.935: access-sw1 %CDP-4-DUPLEX_MISMATCH: Duplex mismatch discovered on GigabitEthernet1/0/8
+Sep 25 14:12:36.225: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:07:24.408: dc-leaf2 %LINK-5-CHANGED: Interface GigabitEthernet0/2, changed state to up
+Sep 25 14:18:12.099: edge-fw01 %ASA-5-713259: Group = VPN-PARTNER, IP = 198.51.100.20, Session established
+Sep 25 14:16:27.778: edge-fw02 %ASA-6-302014: Teardown TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:22:02.432: bastion01 %SEC_LOGIN-1-QUIET_MODE_ON: Still time to wait, [user: admin] [Source: 192.0.2.50]
+Sep 25 14:23:28.826: dist-rtr1 %HSRP-5-STATECHANGE: GigabitEthernet0/1 Grp 10 state Speak -> Standby
+Sep 25 14:07:10.238: edge-rtr2 %BGP-5-ADJCHANGE: neighbor 198.51.100.10 Up
+Sep 25 14:12:05.284: bastion02 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:26:15.127: access-sw2 %SPANTREE-2-ROOTGUARD_BLOCK: Root guard blocking port Gi1/0/12 on VLAN0100
+Sep 25 14:00:05.591: wireless-ctrl1 %ASA-6-302014: Teardown TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:07:55.030: edge-rtr1 %BGP-4-ROUTING: No best path for 0.0.0.0/0
+Sep 25 14:20:50.603: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:08:20.095: edge-rtr1 %BGP-5-ADJCHANGE: neighbor 203.0.113.1 Up
+Sep 25 14:01:59.686: access-sw4 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/2, changed state to up
+Sep 25 14:07:05.089: edge-rtr1 %BGP-5-ADJCHANGE: neighbor 203.0.113.1 Up
+Sep 25 14:09:22.882: core-rtr3 %SYS-5-CLOCKUPDATE: System clock updated from NTP
+Sep 25 14:07:41.032: edge-rtr1 %BGP-5-ADJCHANGE: neighbor 203.0.113.1 Up
+Sep 25 14:06:57.558: edge-rtr1 %BGP-4-ROUTING: No best path for 0.0.0.0/0
+Sep 25 14:27:33.992: dc-leaf1 %ASA-6-302014: Teardown TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:29:20.565: access-sw3 %DHCP-3-NOADDR: DHCP pool CORP_POOL is exhausted
+Sep 25 14:14:01.114: access-sw3 %SW_VLAN-5-DELETE: Deleted VLAN 250
+Sep 25 14:28:35.944: access-sw3 %DHCP-3-NOADDR: DHCP pool CORP_POOL is exhausted
+Sep 25 14:18:02.433: vpn-gw1 %ASA-6-302014: Teardown TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:29:05.080: access-sw3 %DHCP-3-NOADDR: DHCP pool CORP_POOL is exhausted
+Sep 25 14:18:42.867: edge-fw01 %ASA-5-713259: Group = VPN-PARTNER, IP = 198.51.100.20, Session established
+Sep 25 14:06:58.223: edge-rtr2 %BGP-5-ADJCHANGE: neighbor 198.51.100.10 Down User reset
+Sep 25 14:21:04.828: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:15:00.220: dist-sw1 %LINK-3-UPDOWN: Interface GigabitEthernet1/0/24, changed state to down
+Sep 25 14:16:40.240: access-sw4 %SYS-5-CONFIG_I: Configured from console by admin on vty0
+Sep 25 14:02:20.754: core-rtr2 %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to up
+Sep 25 14:11:44.348: bastion02 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:20:47.602: core-rtr3 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/2, changed state to up
+Sep 25 14:21:46.927: core-rtr2 %SNMP-5-COLDSTART: SNMP agent on host is reinitializing
+Sep 25 14:25:40.549: access-sw2 %SPANTREE-5-TOPO_CHG: Topology Change Notice received on VLAN0100
+Sep 25 14:12:01.733: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:28:52.387: access-sw3 %DHCP-4-ADDRESS_ASSIGN: DHCP address 10.20.30.44 assigned to client 0050.56aa.7788
+Sep 25 14:16:06.969: core-rtr2 %SNMP-5-COLDSTART: SNMP agent on host is reinitializing
+Sep 25 14:06:53.913: edge-rtr1 %BGP-3-NOTIFICATION: received from neighbor 203.0.113.1 6/4 (Administrative Shutdown)
+Sep 25 14:27:12.100: core-rtr3 %SW_VLAN-5-DELETE: Deleted VLAN 250
+Sep 25 14:29:36.158: dc-leaf1 %BGP-5-ADJCHANGE: neighbor 198.51.100.10 Up
+Sep 25 14:17:05.486: edge-rtr2 %LLDP-4-NEIGHBOR_NEW: New neighbor detected on GigabitEthernet0/2
+Sep 25 14:02:01.114: core-rtr1 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/1, changed state to down
+Sep 25 14:02:23.104: core-rtr2 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/1, changed state to up
+Sep 25 14:22:51.135: edge-fw02 %SNMP-5-COLDSTART: SNMP agent on host is reinitializing
+Sep 25 14:23:00.618: dist-rtr1 %HSRP-5-STATECHANGE: GigabitEthernet0/1 Grp 10 state Active -> Speak
+Sep 25 14:21:18.006: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:06:54.551: edge-rtr2 %SNMP-5-COLDSTART: SNMP agent on host is reinitializing
+Sep 25 14:24:45.362: edge-rtr1 %BGP-5-ADJCHANGE: neighbor 198.51.100.10 Up
+Sep 25 14:07:24.432: edge-rtr1 %BGP-3-NOTIFICATION: sent to neighbor 203.0.113.1 4/0 (Hold Time Expired)
+Sep 25 14:15:25.344: dist-sw1 %SW_MATM-4-MACFLAP_NOTIF: Host 0050.56aa.1020 in vlan 120 is flapping between port Gi1/0/24 and port Gi1/0/10
+Sep 25 14:25:43.745: edge-rtr1 %SYS-5-CONFIG_I: Configured from console by admin on vty0
+Sep 25 14:12:22.558: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:26:09.194: edge-rtr1 %SNMP-5-COLDSTART: SNMP agent on host is reinitializing
+Sep 25 14:13:06.156: vpn-gw1 %DHCP-4-ADDRESS_ASSIGN: DHCP address 10.20.30.80 assigned to client 0050.56aa.1234
+Sep 25 14:08:23.163: edge-rtr1 %LLDP-4-NEIGHBOR_NEW: New neighbor detected on GigabitEthernet0/2
+Sep 25 14:11:54.203: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:12:52.459: bastion01 %SEC_LOGIN-1-QUIET_MODE_ON: Still time to wait, [user: admin] [Source: 192.0.2.50]
+Sep 25 14:21:32.825: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:28:30.996: access-sw3 %DHCP-3-NOADDR: DHCP pool CORP_POOL is exhausted
+Sep 25 14:09:20.691: core-rtr3 %SYS-5-CLOCKUPDATE: System clock updated from NTP
+Sep 25 14:30:56.983: vpn-gw1 %LLDP-4-NEIGHBOR_NEW: New neighbor detected on GigabitEthernet0/2
+Sep 25 14:07:51.093: edge-rtr2 %SYS-6-LOGGINGHOST_STARTSTOP: Logging to host 192.0.2.200 port 514 started
+Sep 25 14:18:00.389: edge-fw01 %ASA-4-113019: Group = VPN-PARTNER, IP = 198.51.100.20, Session disconnected. Session Type: IPsec
+Sep 25 14:02:30.692: core-rtr2 %OSPF-5-ADJCHG: Process 1, Nbr 10.0.12.1 on GigabitEthernet0/1 from LOADING to FULL, Loading Done
+Sep 25 14:04:21.824: dist-sw3 %ASA-6-302014: Teardown TCP connection for outside:203.0.113.20/443 to inside:10.1.1.20/443
+Sep 25 14:02:22.250: core-rtr1 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/1, changed state to up
+Sep 25 14:02:35.175: core-rtr3 %DHCP-4-ADDRESS_ASSIGN: DHCP address 10.20.30.80 assigned to client 0050.56aa.1234
+Sep 25 14:01:37.854: access-sw1 %SW_VLAN-5-DELETE: Deleted VLAN 250
+Sep 25 14:12:29.429: bastion01 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 192.0.2.50] [localport: 22]
+Sep 25 14:00:39.233: core-rtr3 %SYS-5-CONFIG_I: Configured from console by admin on vty0
+Sep 25 14:28:08.497: dist-sw3 %LLDP-4-NEIGHBOR_NEW: New neighbor detected on GigabitEthernet0/2
+Sep 25 14:31:34.069: dist-sw1 %CDP-4-DUPLEX_MISMATCH: Duplex mismatch discovered on GigabitEthernet1/0/8
+Sep 25 14:07:18.604: edge-rtr1 %BGP-5-ADJCHANGE: neighbor 203.0.113.1 Down BGP Notification received

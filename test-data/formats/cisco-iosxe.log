@@ -1,0 +1,17 @@
+# SYNTHETIC CISCO IOS-XE SYSLOG TEST DATA - NOT REAL PRODUCTION LOGS
+# FOR SYSLOG LENS TESTING ONLY. Fake hostnames; RFC 5737/1918 addresses only.
+# IOS-XE adds a 4-digit year and timezone to the classic collector timestamp:
+# seq: host: Mon Day YYYY HH:MM:SS.mmm TZ: %FACILITY-SEV-MNEMONIC: message
+<187>9001: edge-rtr5: Sep 25 2026 10:00:05.100 UTC: %LINK-3-UPDOWN: Interface GigabitEthernet0/0/2, changed state to down
+<189>9002: edge-rtr5: Sep 25 2026 10:00:07.400 UTC: %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/0/2, changed state to down
+<188>9003: edge-rtr5: Sep 25 2026 10:00:09.010 UTC: %OSPF-5-ADJCHG: Process 1, Nbr 192.0.2.9 on GigabitEthernet0/0/2 from FULL to DOWN, Neighbor Down: Interface down or detached
+<188>9004: edge-rtr5: Sep 25 2026 10:00:40.200 UTC: %OSPF-5-ADJCHG: Process 1, Nbr 192.0.2.9 on GigabitEthernet0/0/2 from LOADING to FULL, Loading Done
+<187>9005: edge-rtr5: Sep 25 2026 10:00:41.005 UTC: %LINK-3-UPDOWN: Interface GigabitEthernet0/0/2, changed state to up
+<189>9006: edge-rtr5: Sep 25 2026 10:00:42.310 UTC: %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/0/2, changed state to up
+<188>9051: dist-sw6: Sep 25 2026 10:05:00.000 UTC: %SW_MATM-4-MACFLAP_NOTIF: Host 0050.56aa.2020 in vlan 40 is flapping between port Te1/1/1 and port Te1/1/2
+<190>9052: dist-sw6: Sep 25 2026 10:05:20.400 UTC: %SPANTREE-6-PORT_STATE: TenGigabitEthernet1/1/1 changed state to forwarding
+<188>9101: bastion05: Sep 25 2026 10:10:00.100 UTC: %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: root] [Source: 203.0.113.90] [localport: 22]
+<188>9102: bastion05: Sep 25 2026 10:10:04.220 UTC: %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: root] [Source: 203.0.113.90] [localport: 22]
+<185>9103: bastion05: Sep 25 2026 10:10:20.800 UTC: %SEC_LOGIN-1-QUIET_MODE_ON: Still time to wait, [user: root] [Source: 203.0.113.90]
+9201: Sep 25 2026 10:15:00.050 UTC: %SYS-7-DEBUG_OK: Crypto engine self-test passed
+<191>9202: core-rtr8: Sep 25 2026 10:15:30.900 UTC: %SYS-7-DEBUG_OK: NVRAM configuration checksum verified

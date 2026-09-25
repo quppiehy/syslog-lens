@@ -1,0 +1,16 @@
+# SYNTHETIC JUNIPER JUNOS SYSLOG TEST DATA (RFC 3164 / BSD style) - NOT REAL PRODUCTION LOGS
+# FOR SYSLOG LENS TESTING ONLY. Fake hostnames; RFC 5737/1918 addresses only.
+# Format: Mon Day HH:MM:SS host process[pid]: TAG: message
+Sep 25 13:00:10 mx1 rpd[1234]: BGP_IO_ERROR_CLOSE_SESSION: bgp_io_reset_task: bgp peer 198.51.100.50 (External AS 64520 IFL ge-0/0/1.0) io error 'no route to host'
+Sep 25 13:00:40 mx1 rpd[1234]: RPD_BGP_NEIGHBOR_STATE_CHANGED: BGP peer 198.51.100.50 (External AS 64520) changed state from Established to Idle (event Stop)
+Sep 25 13:02:00 mx1 rpd[1234]: RPD_BGP_NEIGHBOR_STATE_CHANGED: BGP peer 198.51.100.50 (External AS 64520) changed state from Idle to Established (event RecvKeepAlive)
+Sep 25 13:05:00 mx1 mib2d[1122]: SNMP_TRAP_LINK_DOWN: ifIndex 526, ifAdminStatus up(1), ifOperStatus down(2), ifName ge-0/0/1
+Sep 25 13:05:10 mx1 mib2d[1122]: SNMP_TRAP_LINK_UP: ifIndex 526, ifAdminStatus up(1), ifOperStatus up(1), ifName ge-0/0/1
+Sep 25 13:08:00 mx2 rpd[1200]: OSPF_NBRDOWN: OSPF neighbor 192.0.2.15 (realm ospf-v2 ge-0/0/2.0 area 0.0.0.0) state changed from Full to Down due to KillNbr (event reason: interface went down)
+Sep 25 13:08:30 mx2 rpd[1200]: OSPF_NBRUP: OSPF neighbor 192.0.2.15 (realm ospf-v2 ge-0/0/2.0 area 0.0.0.0) state changed from Down to Full due to 2WayReceived (event reason: adjacency established)
+Sep 25 13:10:00 srx1 sshd[3301]: Failed password for admin from 203.0.113.80 port 51122 ssh2
+Sep 25 13:10:04 srx1 sshd[3301]: Failed password for admin from 203.0.113.80 port 51123 ssh2
+Sep 25 13:10:08 srx1 sshd[3301]: Failed password for admin from 203.0.113.80 port 51124 ssh2
+Sep 25 13:15:00 mx3 chassisd[900]: CHASSISD_FRU_EVENT: FPC 0 (FRU_STATE) has changed state from Empty to Online
+Sep 25 13:20:00 mx3 alarmd[500]: Alarm set: FPC color=YELLOW, class=CHASSIS reason=FPC 1 Major Errors
+Sep 25 13:20:30 mx3 alarmd[500]: Alarm cleared: FPC color=YELLOW, class=CHASSIS reason=FPC 1 Major Errors

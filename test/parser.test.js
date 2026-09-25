@@ -64,17 +64,27 @@ test('unparseable lines are counted separately and do not become events', () => 
   const lines = [
     '<187>1 2026-09-24T03:14:02.114Z core-rtr1 ifmgr 150 LINK_STATE - a well-formed line',
     'this line has no timestamp or recognisable syslog header at all',
-    '###not a log line###',
     '',
     '   ',
   ].join('\n');
   const { ev, bad } = parse(lines);
   assert.equal(ev.length, 1);
   // Blank/whitespace-only lines are skipped outright (not counted as bad);
-  // the two genuinely unparseable lines are counted.
-  assert.equal(bad.length, 2);
+  // the one genuinely unparseable line is counted.
+  assert.equal(bad.length, 1);
   assert.ok(bad.includes('this line has no timestamp or recognisable syslog header at all'));
-  assert.ok(bad.includes('###not a log line###'));
+});
+
+test('comment lines (optional leading whitespace, then "#") are skipped entirely, not counted as unparsed', () => {
+  const lines = [
+    '# a comment describing this fixture',
+    '   # an indented comment',
+    '###not a log line either, but still starts with "#"###',
+    '<187>1 2026-09-24T03:14:02.114Z core-rtr1 ifmgr 150 LINK_STATE - a well-formed line',
+  ].join('\n');
+  const { ev, bad } = parse(lines);
+  assert.equal(ev.length, 1);
+  assert.equal(bad.length, 0, 'all three "#"-led lines should be skipped, not counted as bad');
 });
 
 test('guess() infers severity from keywords in the message', () => {

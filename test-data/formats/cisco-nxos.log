@@ -1,0 +1,15 @@
+# SYNTHETIC CISCO NX-OS SYSLOG TEST DATA - NOT REAL PRODUCTION LOGS
+# FOR SYSLOG LENS TESTING ONLY. Fake hostnames; RFC 5737/1918 addresses only.
+# NX-OS format: <PRI>YYYY Mon Day HH:MM:SS host %FACILITY-SEV-MNEMONIC: message (year leads the timestamp)
+<187>2026 Sep 25 11:00:01 core-sw7 %ETHPORT-3-IF_DOWN_LINK_FAILURE: Interface Ethernet1/1 is down (Link failure)
+<189>2026 Sep 25 11:00:03 core-sw7 %ETHPORT-5-SPEED: Interface Ethernet1/1, operational speed changed to 10 Gbps
+2026 Sep 25 11:00:30 core-sw7 %ETHPORT-3-IF_UP: Interface Ethernet1/1 is up
+<189>2026 Sep 25 11:00:32 core-sw7 %ETHPORT-5-SPEED: Interface Ethernet1/1, operational speed changed to 10 Gbps
+<188>2026 Sep 25 11:02:00 core-sw8 %OSPF-4-ERRRCV: Received invalid packet: mismatch area ID from 192.0.2.30 on Ethernet1/2
+<186>2026 Sep 25 11:05:10 access-sw11 %STP-2-ROOTGUARD_BLOCK: Root guard blocking port Eth1/0/5 on VLAN0060
+<190>2026 Sep 25 11:05:12 access-sw11 %STP-6-PORT_STATE: Port Ethernet1/0/5 instance 0 moving from listening to forwarding
+<188>2026 Sep 25 11:10:00 dist-rtr7 %VPC-4-PEER_LINK_DOWN: vPC peer-link is down
+<189>2026 Sep 25 11:10:20 dist-rtr7 %VPC-5-PEER_LINK_UP: vPC peer-link is up
+<188>2026 Sep 25 11:15:00 bastion09 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 198.51.100.201] [localport: 22]
+<188>2026 Sep 25 11:15:05 bastion09 %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: admin] [Source: 198.51.100.201] [localport: 22]
+<185>2026 Sep 25 11:15:20 bastion09 %SEC_LOGIN-1-QUIET_MODE_ON: Still time to wait, [user: admin] [Source: 198.51.100.201]
