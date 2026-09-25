@@ -77,6 +77,43 @@ test('requiring server/app in production with valid JWT_SECRET and INVITE_CODE d
   assert.equal(result.threw, false, 'require(app) should not have thrown');
 });
 
+// Covers the review finding that Vercel auto-detects a project's
+// .env.example and offers to pre-fill Environment Variables from it: even
+// if someone imports it (or copy-pastes its old placeholder text) and the
+// result happens to be long enough to pass validateJwtSecret/
+// validateInviteCodeConfig's length checks, assertProductionConfig must
+// still refuse to boot with known placeholder text.
+test('requiring server/app in production with a placeholder-looking JWT_SECRET throws at module load', () => {
+  const result = requireAppInChildProcess({
+    NODE_ENV: 'production',
+    JWT_SECRET: 'replace-this-with-a-generated-secret-at-least-32-characters-long',
+    INVITE_CODE: 'a-valid-invite-code-123',
+    DB_STORAGE: ':memory:',
+  });
+  assert.equal(result.threw, true, 'require(app) should have thrown');
+  assert.match(result.stderr, /looks like a placeholder value/);
+});
+
+test('requiring server/app in production with a placeholder-looking INVITE_CODE throws at module load', () => {
+  const result = requireAppInChildProcess({
+    NODE_ENV: 'production',
+    JWT_SECRET: 'a'.repeat(32),
+    INVITE_CODE: 'change-me-invite-code',
+    DB_STORAGE: ':memory:',
+  });
+  assert.equal(result.threw, true, 'require(app) should have thrown');
+  assert.match(result.stderr, /looks like a placeholder value/);
+});
+
+test('findPlaceholderPattern detects known placeholder substrings case-insensitively and ignores real values', () => {
+  const { findPlaceholderPattern } = require('../server/config');
+  assert.equal(findPlaceholderPattern('replace-this-with-a-secret'), 'replace-this');
+  assert.equal(findPlaceholderPattern('Please CHANGE-ME before deploying'), 'change-me');
+  assert.equal(findPlaceholderPattern('a'.repeat(32)), null);
+  assert.equal(findPlaceholderPattern(''), null);
+  assert.equal(findPlaceholderPattern(undefined), null);
+});
+
 // (a): the register handler's own fail-closed check, exercised directly
 // against server/routes/auth.js mounted on a minimal express app rather
 // than server/app.js — this deliberately bypasses assertProductionConfig()

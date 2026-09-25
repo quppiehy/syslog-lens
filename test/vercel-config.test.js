@@ -14,6 +14,19 @@
 // Pointing outputDirectory at a directory that is guaranteed to hold no
 // files closes both paths: there is nothing for the CDN to find and serve
 // ahead of the Express function.
+//
+// This project deliberately does NOT rely on Vercel's zero-config Express
+// preset (the dashboard "Framework Preset") — that preset looks for the app
+// entry file *inside* outputDirectory
+// (https://vercel.com/docs/frameworks/backend/express#exporting-the-express-application),
+// which fails outright against a guaranteed-empty outputDirectory ("No
+// entrypoint found in output directory"). Instead `vercel.json` sets
+// `"framework": null` to force the "Other" preset
+// (https://vercel.com/docs/project-configuration/vercel-json#framework:
+// "To select 'Other' as the Framework Preset, use `null`") so a Framework
+// Preset auto-detected/selected on the dashboard can't reintroduce that
+// failure, and uses an explicit catch-all rewrite to a single Node.js
+// function at api/index.js instead.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -64,6 +77,30 @@ test('the project root itself is not also configured as a public/static director
   assert.ok(!publicEntries.includes('.env'), '.env must never live inside public/');
 });
 
+test('framework is explicitly null so a dashboard Framework Preset cannot override this config', () => {
+  const config = readVercelConfig();
+  assert.ok(
+    Object.prototype.hasOwnProperty.call(config, 'framework'),
+    'vercel.json must explicitly set "framework" (see file header comment for why)'
+  );
+  assert.equal(config.framework, null, 'framework must be null (selects "Other") — a preset like Express would override this config');
+});
+
+test('rewrites contains a catch-all rewrite that routes every request to the /api function', () => {
+  const config = readVercelConfig();
+  assert.ok(Array.isArray(config.rewrites) && config.rewrites.length > 0, 'expected at least one rewrite');
+
+  const catchAll = config.rewrites.find((r) => {
+    if (typeof r.source !== 'string' || typeof r.destination !== 'string') return false;
+    // Accept any regex/path pattern that matches everything (e.g. "/(.*)"
+    // or "^/(.*)$"), routed to the /api function.
+    const matchesEverything = /\(\.\*\)/.test(r.source);
+    const routesToApi = /^\/api(\?|$)/.test(r.destination);
+    return matchesEverything && routesToApi;
+  });
+  assert.ok(catchAll, 'expected a catch-all rewrite (matching every path) whose destination is the /api function');
+});
+
 test('functions config includes syslog-lens.html and public/** so the Vercel entry point can read them at runtime', () => {
   const config = readVercelConfig();
   assert.ok(config.functions, 'expected a functions config for includeFiles');
@@ -88,4 +125,14 @@ test('the configured Vercel entry point file exists and re-exports the Express a
     const resolved = path.join(PROJECT_ROOT, fnPath);
     assert.ok(fs.existsSync(resolved), `configured function entry "${fnPath}" must exist`);
   }
+});
+
+test('api/index.js exports a request handler backed by the Express app', () => {
+  const config = readVercelConfig();
+  const functionPaths = Object.keys(config.functions || {});
+  assert.ok(functionPaths.includes('api/index.js'), 'expected vercel.json functions config to include api/index.js');
+
+  const handler = require(path.join(PROJECT_ROOT, 'api', 'index.js'));
+  assert.equal(typeof handler, 'function', 'api/index.js must export a function (the Vercel request handler)');
+  assert.equal(typeof handler.restoreOriginalUrl, 'function', 'api/index.js must export restoreOriginalUrl for the path-restoring shim to be unit-testable');
 });
