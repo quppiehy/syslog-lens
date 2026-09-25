@@ -4,7 +4,7 @@
   "description": "Automated tests for the single-file Syslog Lens app.",
   "private": true,
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "scripts": {
     "test": "node --test test/*.test.js",

@@ -20,7 +20,7 @@ Then open <http://localhost:3000>. You'll be redirected to `/login`; register an
 
 You only need this to run the automated tests, not to use the app.
 
-**Requirements:** [Node.js](https://nodejs.org/) 18 or later.
+**Requirements:** [Node.js](https://nodejs.org/) 24 (the test library jsdom needs 22+; CI and Vercel use 24.x).
 
 **First-time setup** (once per machine, or again after deleting `node_modules`):
 
