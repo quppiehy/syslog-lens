@@ -3,7 +3,14 @@
   "framework": null,
   "outputDirectory": ".vercel-empty-output",
   "rewrites": [
-    { "source": "/:path*", "destination": "/api?__path=:path*" }
+    {
+      "source": "/",
+      "destination": "/api?__path="
+    },
+    {
+      "source": "/:path*",
+      "destination": "/api?__path=:path*"
+    }
   ],
   "functions": {
     "api/index.js": {
