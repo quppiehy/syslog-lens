@@ -11,6 +11,7 @@ require('./models/user'); // register the User model with Sequelize
 require('./models/loginAttempt'); // register the LoginAttempt model with Sequelize
 const authRouter = require('./routes/auth');
 const { requirePage, resolveUser } = require('./middleware/auth');
+const ensureDbSynced = require('./middleware/ensureDbSynced');
 const { TRUST_PROXY, COOKIE_SECURE, assertProductionConfig } = require('./config');
 const { computeInlineScriptHashes } = require('./lib/csp');
 
@@ -74,6 +75,14 @@ app.use((err, req, res, next) => {
   }
   return next(err);
 });
+
+// Ensures sequelize.sync() has run before any route below touches the DB.
+// On a traditional long-running process (server/index.js) this resolves
+// instantly after the first request (sync already ran at startup); on
+// Vercel it does the actual work, once per cold-started instance — see
+// server/middleware/ensureDbSynced.js. A failed sync returns 503 here and
+// is retried on the next request rather than wedging the instance.
+app.use(ensureDbSynced);
 
 app.get('/api/health', async (req, res) => {
   let dbStatus = 'unknown';

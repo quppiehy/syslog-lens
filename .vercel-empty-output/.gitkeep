@@ -1,0 +1,5 @@
+This directory is intentionally empty.
+
+It exists only so vercel.json's "outputDirectory" can point somewhere that
+is guaranteed to contain no static files (see the comment in vercel.json
+for why). Do not add files here.

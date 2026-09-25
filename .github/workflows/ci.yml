@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # DB_STORAGE defaults to SQLite under server/data/, which is fine for
+      # this job (no DATABASE_URL is set, so the Postgres path is never
+      # used); individual test files that need :memory: set that
+      # themselves. JWT_SECRET is generated at runtime below (not hard-coded
+      # here) so scanners like GitGuardian don't flag a secret-looking
+      # literal.
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Node version from package.json engines
+        id: node-version
+        run: |
+          VERSION=$(node -e "console.log(require('./package.json').engines.node)")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node-version.outputs.version }}
+          cache: npm
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate JWT_SECRET for this run
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Run tests
+        run: npm test

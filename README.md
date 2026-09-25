@@ -74,7 +74,8 @@ cp .env.example .env
 | Variable | Default | Notes |
 |---|---|---|
 | `PORT` | `3000` | Port Express listens on. |
-| `DB_STORAGE` | `server/data/syslog-lens.sqlite` | SQLite file path (or `:memory:` for tests). |
+| `DB_STORAGE` | `server/data/syslog-lens.sqlite` | SQLite file path (or `:memory:` for tests). Ignored when `DATABASE_URL` is set. |
+| `DATABASE_URL` | *(unset)* | When set, use Postgres (via `pg`) instead of SQLite — e.g. the Neon integration on Vercel sets this automatically. See "Deploying to Vercel" below. |
 | `JWT_SECRET` | *(required)* | Signs auth JWTs; must be ≥32 characters. |
 | `JWT_EXPIRES_IN` | `8h` | JWT/cookie lifetime (`jsonwebtoken` `expiresIn` format). |
 | `COOKIE_SECURE` | `false` | Marks the auth cookie `Secure`; also gates whether HSTS is sent. Set `true` behind HTTPS. |
@@ -206,13 +207,59 @@ Once a log is loaded, the **Generate report** button in the header (next to **Op
 
 Both reports are generated entirely in the browser and downloaded as a single, self-contained `.html` file (inline CSS, no external fonts or scripts, no network requests) — nothing about the log ever leaves the page. Filenames look like `syslog-lens-summary-<source>-<timestamp>.html` and `syslog-lens-incident-<incident>-<timestamp>.html`. Reports use a dark theme on screen and switch to a light, ink-saving theme (severity colours and labels preserved) when printed.
 
+## Deploying to Vercel
+
+The app deploys to [Vercel](https://vercel.com) as a single zero-config Express [Vercel Function](https://vercel.com/docs/frameworks/backend/express), backed by [Neon](https://neon.tech) Postgres instead of SQLite.
+
+### How the deployment is wired up
+
+- **Entry point:** `index.js` at the project root re-exports the Express app from `server/app.js` — one of the [conventional locations](https://vercel.com/docs/frameworks/backend/express#exporting-the-express-application) Vercel's zero-config Express support looks for. `server/index.js` (used by `npm start`) is unaffected and still does its own `app.listen()`.
+- **Database:** if `DATABASE_URL` is set, `server/db.js` uses Sequelize's `postgres` dialect (via `pg`/`pg-hstore`) with SSL required and a small pool (`max: 2`) sized for a serverless function rather than a long-running process. Unset, it falls back to SQLite exactly as before. `sqlite3` is only ever `require()`'d on the SQLite path, and is listed as an `optionalDependency` — its native build can't fail Vercel's `npm install`, and the Postgres path never has to load it.
+- **Schema:** there's no separate migration step. `sequelize.sync()` (no `force`/`alter`) runs the same way it always has, but on Vercel there is no startup hook to run it before the first request, and a function instance can be reused across many requests — so `server/middleware/ensureDbSynced.js` runs it lazily, caching the in-flight promise so it happens at most once per instance. If it fails, that request gets a `503` and the *next* request retries (the failure isn't cached).
+- **Why `syslog-lens.html` can't be a static file:** Vercel's docs state that files in the project's Output Directory (default `public`, or `.`) are served directly from its CDN, and that "precedence is given to the filesystem prior to rewrites being applied" ([vercel.json reference](https://vercel.com/docs/project-configuration/vercel-json#outputdirectory)) — a matching static file is served *before* any rewrite or function runs, meaning before `requirePage`'s auth check ever executes. The Express docs separately confirm that a zero-config Express deployment serves anything under `public/**` the same CDN-first way ([Express on Vercel — Serving static assets](https://vercel.com/docs/frameworks/backend/express#serving-static-assets)). Since this repo's own `public/` holds the login/register pages — which still need helmet's CSP/HSTS from Express, not the CDN's default headers — `vercel.json` sets `outputDirectory` to `.vercel-empty-output/`, a directory that is checked into the repo and guaranteed to contain no files. With nothing there to match, every request (`/`, `/syslog-lens.html`, `/login`, `/register`, `/auth.css`, `/api/*`, everything) always falls through to the Express function, which is the only place auth and security headers are enforced. `test/vercel-config.test.js` asserts this directory stays empty and that `outputDirectory` isn't `public` or `.`.
+- **`includeFiles`:** `syslog-lens.html` and `public/**` are read via `fs`/`express.static()`/`res.sendFile()` at runtime, not via a static `require()` — Vercel's dependency tracer can't see those, so `vercel.json`'s `functions["index.js"].includeFiles` force-includes them in the deployed function bundle.
+
+### Checklist
+
+1. **Link the repo.** [Import the project](https://vercel.com/new) into Vercel from GitHub (or run `vercel link`).
+2. **Add Postgres.** From the project's Vercel dashboard, add the [Neon integration](https://vercel.com/marketplace/neon) (or any Postgres add-on) — this sets `DATABASE_URL` for you automatically. You don't need to type it in.
+3. **Set the remaining environment variables** (Project Settings → Environment Variables, for both Production and Preview):
+
+   | Variable | Value | How to generate |
+   |---|---|---|
+   | `DATABASE_URL` | *(set automatically by the Neon integration)* | — |
+   | `JWT_SECRET` | a random string, ≥32 characters | `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+   | `INVITE_CODE` | a random string, ≥12 characters | `node -e "console.log(require('crypto').randomBytes(9).toString('base64url'))"` |
+   | `COOKIE_SECURE` | `true` | Vercel always serves over HTTPS, so this should always be `true` in Production/Preview — never leave it at the local-dev default of `false`. |
+   | `TRUST_PROXY` | `1` | Vercel places exactly one proxy (its edge network) in front of your function. `1` means "trust exactly one hop", which makes `req.ip` the address that edge actually observed — not whatever a client puts in its own `X-Forwarded-For` header (see `test/trust-proxy.test.js`), and not the edge's own address for every request (the failure mode if this is left at its `false` default). |
+
+   The login/register rate-limit variables (`LOGIN_EMP_MAX_ATTEMPTS`, etc.) are optional — the defaults documented above apply if you don't set them.
+4. **Redeploy** (Vercel redeploys automatically on the next push once these are set; trigger one manually from the dashboard if needed).
+5. **Run the smoke check** against the deployed URL:
+
+   ```bash
+   npm run smoke -- https://<your-project>.vercel.app
+   ```
+
+   This confirms, from the outside, that logged-out visitors get redirected instead of served the app, that nothing outside `public/` is reachable, and that the login/register pages carry the real security headers (not the CDN's defaults).
+6. **Turn on branch protection.** In the GitHub repo's Settings → Branches, add a protection rule for `main` requiring the `CI / test` check (from `.github/workflows/ci.yml`) to pass before merging.
+
+### CI/CD
+
+- `.github/workflows/ci.yml` runs the full test suite (`npm test`) on every pull request and push to `main`, on Ubuntu with the Node version pinned in `package.json`'s `engines` field, with Playwright's Chromium browser cached between runs.
+- Actual deployments are handled by Vercel's own Git integration: every pull request gets a Preview Deployment, and pushes to `main` deploy to Production — no separate deploy workflow is needed. To smoke-test a PR's preview deployment, run `npm run smoke -- <preview-url>` manually (its URL is posted by the Vercel bot on the PR) until that's wired into CI.
+
 ## Project files
 
 | Path | Purpose |
 |---|---|
 | `syslog-lens.html` | The whole app: HTML, CSS and JS in one file. Served by the backend at `/` and `/syslog-lens.html`, protected by login. |
 | `public/` | Public login/register pages and their shared assets (`login.html`, `register.html`, `auth.css`, `auth.js`) |
+| `index.js` | Vercel entry point — re-exports the Express app from `server/app.js` (see "Deploying to Vercel" above). Not used for local dev; that's `server/index.js`. |
+| `vercel.json` | Vercel deployment config: keeps static serving out of the CDN's way and bundles `syslog-lens.html`/`public/**` into the function. |
+| `scripts/smoke.js` | Dependency-free smoke check for a deployed (or local) instance — `npm run smoke -- <url>`. |
 | `test/` | Automated tests |
 | `test-data/` | Synthetic sample log and the incident groupings it should produce |
-| `server/` | Backend (Express + Sequelize/SQLite): auth, page guards, and static serving |
+| `server/` | Backend (Express + Sequelize/SQLite or Postgres): auth, page guards, DB sync, and static serving |
+| `.github/workflows/ci.yml` | CI: runs the test suite on every PR and push to `main` |
 | `HANDOFF.md` | Design decisions, known limitations and next steps |

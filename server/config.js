@@ -14,6 +14,14 @@ const DB_STORAGE = process.env.DB_STORAGE
     : path.resolve(process.cwd(), process.env.DB_STORAGE)
   : path.join(__dirname, 'data', 'syslog-lens.sqlite');
 
+// When set, the app uses Postgres (via the `pg` driver) instead of SQLite —
+// see server/lib/dbConfig.js. This is how a Vercel deployment with the Neon
+// Postgres integration switches dialects: Vercel/Neon populate
+// DATABASE_URL automatically, so no other config change is needed. Left
+// unset, DB_STORAGE/SQLite (above) is used, exactly as before — this keeps
+// local dev and the test suite on SQLite with zero behavior change.
+const DATABASE_URL = process.env.DATABASE_URL || null;
+
 // JWT signing secret. Required — there is no insecure default. Tests are
 // expected to set their own JWT_SECRET before requiring server/app.
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -159,6 +167,7 @@ const RATE_LIMIT = {
 module.exports = {
   PORT,
   DB_STORAGE,
+  DATABASE_URL,
   JWT_SECRET,
   JWT_EXPIRES_IN,
   MIN_JWT_SECRET_LENGTH,
